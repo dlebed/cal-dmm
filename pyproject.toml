@@ -1,0 +1,52 @@
+[project]
+name = "caldmm"
+version = "0.1.0"
+description = "Fluke 5700A and HP 3458A drivers, verification and calibration toolkit"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "pyyaml",
+    "scipy",
+    "prefixed",
+]
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.optional-dependencies]
+gpib = ["linux-gpib"]          # Linux: linux-gpib Python binding
+visa = ["pyvisa"]              # Windows/macOS: NI-VISA or Keysight IO Libraries
+serial = ["pyserial"]
+dev = ["pytest", "pytest-mock"]
+
+[project.scripts]
+caldmm-acal = "caldmm.tools.acal:main"
+caldmm-interactive = "caldmm.tools.interactive:main"
+caldmm-5700a-console = "caldmm.apps.fluke5700a_console:main"
+caldmm-5700a-selfcal = "caldmm.apps.fluke5700a_selfcal:main"
+caldmm-cal-verify = "caldmm.apps.cal_verify:main"
+caldmm-cal-analyze = "caldmm.apps.cal_analyze:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"caldmm.cal.data" = ["*.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+    "hw: marks tests requiring real hardware (deselect with '-m \"not hw\"')",
+]

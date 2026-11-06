@@ -1,0 +1,1466 @@
+# HP/Agilent/Keysight 3458A 8.5-digit DMM -- specification file.
+#
+# SOURCE.  Every accuracy figure below is transcribed from the *Keysight 3458A
+# Multimeter* data sheet, the document Appendix A of the User's Guide
+# (p.409) redirects to:
+#
+#     "3458A Multimeter -- Reliably Accurate Measurement Every Time",
+#     Keysight Technologies, 46 pages, publication 5965-4971E
+#     (md5 facc927d6a23e775fb7c13da0f85f146); markdown extract in
+#     docs/3458a/3458a-specifications.md
+#
+#   p.12  DC voltage: ranges, input impedance, tempco, accuracy
+#   p.13  DC voltage transfer accuracy
+#   p.17  Two-wire and four-wire ohms: ranges, tempco, accuracy
+#   p.18  Two-wire ohms offset adder
+#   p.21  DC current: ranges, shunt, burden, tempco, accuracy
+#   p.24  AC voltage: the three SETACV techniques and their bandwidths
+#   p.25  SETACV SYNC accuracy (ACBAND <=2 MHz and >2 MHz)
+#   p.27  AC voltage high-frequency temperature coefficient (SYNC section)
+#   p.28  SETACV ANA accuracy
+#   p.30  Maximum input (volt-hertz product); SETACV RNDM ranges
+#   p.31  SETACV RNDM accuracy
+#   p.32  AC voltage high-frequency temperature coefficient (RNDM section)
+#   p.33  AC current: ranges, shunt, burden, tempco, accuracy (the specified
+#         columns; the "typical" 5-100 kHz columns are not carried)
+#
+# AUDIT TRAIL.  ``.gitignore`` excludes every PDF, so the data sheet itself
+# cannot be committed here.  A markdown extract of exactly the pages listed
+# above IS committed, at
+#
+#     docs/3458a/3458a-specifications.md
+#
+# and tests/cal/test_3458a_extract.py compares it cell by cell against this
+# file, so every figure below can be audited from version control alone and
+# the two cannot drift.
+#
+# ---------------------------------------------------------------------------
+# WHAT "ppm of range" MEANS HERE
+# ---------------------------------------------------------------------------
+#
+# The data sheet prints a "Full scale" column that is 120 % of the range name
+# (the 10 V range reads to 12.0000000).  "ppm of range" is ppm of the RANGE
+# NAME, not of that full scale.  p.9 says so outright, and scopes it to the ac
+# functions explicitly as well as the dc ones:
+#
+#     "The Keysight 3458A accuracy is specified as a part per million (ppm) of
+#      the reading plus a ppm of range for DCV, ohms, and DCl.  In ACV and ACl,
+#      the specification is percent of reading plus percent of range.  RANGE
+#      MEANS THE NAME OF THE SCALE, e.g. 1 V, 10 V, etc.; range does not mean
+#      the full-scale reading, e.g. 1.2 V, 12 V, etc."
+#
+# and its worked EXAMPLE 1 on the same page does the arithmetic:
+#
+#     "The 24-hour accuracy specification for a 10 V DC measurement on the
+#      10 V range is 0.5 ppm + 0.05 ppm ... (0.5/1,000,000 x 10 V) +
+#      (0.05/1,000,000 x 10 V) = +/- 5.5 uV"
+#
+# so `fs` below is the range name on every function, ac included, and the ppm
+# figures are used verbatim.  The 20 % headroom is recorded in each range's
+# note; it means `holds()` is pessimistic by design, refusing an 11 V reading
+# on the 10 V range.
+#
+# ---------------------------------------------------------------------------
+# THE TEMPERATURE DATUM -- there are two of them, and they are not the same
+# ---------------------------------------------------------------------------
+#
+# Reading a tempco from the wrong datum is a silent error, so both regimes are
+# written out here:
+#
+#  * DC (DCV, DCI, ohms) is referenced to **Tcal**, the ambient at the last
+#    EXTERNAL calibration.  That is a number the instrument stores, not a
+#    constant: `CAL? 58` ("cal 0 temperature"), `CAL? 59` ("cal 10
+#    temperature", the one to use for DCV) and `CAL? 60` ("cal 10 K
+#    temperature", the one for OHMS) return it, all three being "Internal
+#    temperatures at time of last CAL adjustment"
+#    (3458a-cal-manual.txt:2893-2895, PDF p.93).  The window is
+#    Tcal +/- 1 C for the 24-hour column and Tcal +/- 5 C for 90 day, 1 year
+#    and 2 year (3458a-datasheet.txt:448-449, PDF p.12, footnotes 4 and 5).
+#    The per-range `tempco` blocks below are the WITH-ACAL column, which is
+#    the adder for departures BEYOND that window (3458a-datasheet.txt:446,
+#    footnote 2), as the data sheet's own Example 4 shows: at 38 C it
+#    multiplies by the 10 C beyond Tcal +/- 5 C, not by the full departure
+#    (3458a-datasheet.txt:354-366, PDF p.10).
+#  * AC is referenced to the **last ACAL temperature**, with a +/- 1 C dead
+#    band, and has no Tcal +/- 5 C column at all: "Additional error beyond
+#    +/- 1 C, but within + 5 C of last ACAL" (3458a-datasheet.txt:997, PDF
+#    p.25; :1208, p.28; :1339, p.30).  Read it with TEMP? right after an ACAL.
+#
+# `temperature:` below states the DC window, which is the one the Calibration
+# Manual makes a mandatory precondition: "The internal temperature of the
+# 3458A under test must be within 5 C of its temperature when last calibrated.
+# Use the TEMP? command ... compare it to the calibration temperature obtained
+# by executing the command CAL? 59 for DCV and CAL? 60 for OHMS"
+# (3458a-cal-manual.txt:773-775, PDF p.29), and outside it "you must
+# recalculate all test limits" (:1616-1621, PDF p.56).  It is a RELATIVE
+# window: the half-widths are here, the centre comes from the instrument at
+# run time.  With no centre in hand nothing is invented and no window check
+# happens offline.  A model carries one `temperature:` block, so the ac datum
+# is not expressible alongside it -- an ac run has to supply the post-ACAL
+# TEMP? reading as the tempco reference itself.
+#
+# Independent of either window, every interval but 24h additionally requires
+# an ACAL within the last 24 hours and within 1 C of the ACAL temperature;
+# that is what `interval_basis: since_acal` records.
+#
+# ---------------------------------------------------------------------------
+# CONDITIONS THE DC VOLTAGE TABLE IS WRITTEN FOR
+# ---------------------------------------------------------------------------
+#
+# 3458a-datasheet.txt:448-456 (PDF p.12), footnotes 4 and 5:
+#
+#     "4. For fixed range (> 4 min.), MATH NULL and Tcal +/- 1 C
+#      5. ... Tcal +/- 5 C; MATH NULL and fixed range.  ...  Without MATH
+#         NULL, add 0.15 ppm of range to 10 V, 0.7 ppm of range to 0.1V.
+#         Without MATH NULL and for fixed range less than 4 minutes, add
+#         0.25 ppm of range to 10 V, 1.7 ppm of range to 1 V and 17 ppm of
+#         range to 0.1 V."
+#
+# The engine sends PRESET NORM, which turns MATH off (drivers/hp3458a.py:1227;
+# no MATH command appears anywhere in cal/adapters.py or the driver), and it
+# re-selects the range for every point.  So BOTH conditions fail on every
+# reading this code base takes, well inside 4 minutes, and the SECOND
+# sentence's figures are the ones that apply -- not sometimes, always.  That
+# makes them unconditional here, so they are carried as `regime_adder:` on the
+# 10 V (0.25), 1 V (1.7) and 0.1 V (17 ppm of range) ranges rather than left as
+# prose: an adder that always applies but is only written in a comment is an
+# error the verdict does not see.  `evaluate_limit` adds it to every evaluation
+# of those ranges, in both roles, and prints it separately from the row, so a
+# report shows "9 ppm rdg + 3 ppm rng +17 ppm rng (no MATH NULL, fixed range
+# < 4 min)" and the data sheet's own row stays legible inside it.
+#
+# Read the second sentence as REPLACING the first rather than stacking on it:
+# it names its own combined condition and gives 0.1 V one figure, 17 ppm.  The
+# first sentence's 0.15 / 0.7 ppm of range are the figures a future adapter
+# that DOES null each range but still re-ranges inside 4 minutes would switch
+# to; they are recorded in the comment beside each `regime_adder:`.  The data
+# sheet gives no adder at all for the 100 V and 1000 V ranges, and no
+# "without MATH NULL" figure for 1 V, so those cases say so in place.
+#
+# ---------------------------------------------------------------------------
+# WHAT THIS FILE DOES NOT CARRY -- read before trusting a verdict
+# ---------------------------------------------------------------------------
+#
+#  * Option 002 (high stability) as the default.  The data sheet prints its
+#    TIGHTER ppm-of-reading figures in parentheses; they are carried in the
+#    `options: "002"` block below and applied only when asked for
+#    (`--meter-option 002`).  Without it an Option 002 unit is judged at the
+#    standard figures -- too LENIENTLY, never too harshly.
+#  * The DCV MATH NULL adders for the regimes this code base does NOT run in:
+#    the "without MATH NULL but on a range held >= 4 min" figures (0.15 ppm of
+#    range on 10 V, 0.7 on 0.1 V).  The regime that IS run -- no null, range
+#    under 4 minutes -- is carried, as `regime_adder:` on three ranges.
+#  * The ac High frequency temperature coefficient (3458a-datasheet.txt:
+#    1126-1136, PDF p.27, printed again at :1443-1451, PDF p.32).  "For
+#    outside Tcal +/- 5 C add the following error, (% of reading)/ C":
+#
+#        Range           2-4 MHz     4-10 MHz
+#        10 mV - 1 V     0.02 %/C     0.08 %/C
+#        10 V - 1000 V   0.08 %/C     0.08 %/C
+#
+#    A band carries one `tempco`, and that slot already holds the ACAL-
+#    referenced "beyond +/- 1 C, within + 5 C of last ACAL" figure, which is a
+#    different regime with a different datum -- so this one is named on each
+#    wide band's `note:` instead of replacing it.  It is up to 40x the carried
+#    coefficient (0.08 vs 0.002 %/C) for a unit more than 5 C from Tcal.
+#  * The ac crest-factor, source-impedance/flatness and ACDCV adder tables
+#    (p.25, p.28, p.31), and every ACDCV, ACDCI, frequency, period and
+#    digitizing specification.
+#  * The ANA low-frequency error table (p.29), the NPLC- and ACBAND-low-
+#    dependent adder of up to 0.9 % of reading.
+#  * The dc transfer-accuracy/linearity tables (p.13, p.20), the AZERO-OFF
+#    adders (p.16, p.20) and the rms-noise multipliers (p.14, p.20).
+#
+# The FACTORY-TRACEABILITY adders are carried, per function, in `traceability:`
+# blocks -- 2 ppm of reading on dc volts (3458a-datasheet.txt:282-287, PDF
+# p.9, and :458-459, p.12), 3 ppm on the 10 kohm ohms point (:668-669, p.17),
+# 5 ppm on dc current (:838-839, p.21) and 2 ppm of the 10 V dc traceability
+# on ac volts (:1001-1002, p.25).  They are NEVER part of a tolerance: the
+# data sheet's tables are relative to the calibration standards, and these
+# figures are what turns a relative accuracy into an absolute one, so they
+# belong to the uncertainty budget of a run that uses this meter as the
+# reference.  The figures here are the FACTORY defaults; a unit recalibrated
+# elsewhere takes them from its own calibration certificate.
+#
+# The ac TEMPERATURE COEFFICIENTS are carried, on the bands rather than on the
+# ranges: p.25/p.28/p.30 print one per technique per range, so a band that
+# would have grouped two techniques with different coefficients is split.  The
+# high-frequency coefficient above is the one exception, and is not carried.
+#
+schema_version: 1
+model_id: hp3458a
+display_name: "HP/Agilent/Keysight 3458A 8.5-digit DMM"
+role: meter
+driver: {module: caldmm.drivers.hp3458a, cls: HP3458A, func_enum: Func}
+adapter: "caldmm.cal.adapters:HP3458AMeter"
+
+# HP/Agilent invalid-reading sentinel.
+overload_sentinel: 9.9e+37
+
+# THE POINT OF THIS FIELD.  A 3458A's 90-day, 1-year and 2-year figures are not
+# "N days since the calibration sticker" -- footnote 5 on every accuracy table
+# reads "within 24-hours and +/- 1 C of last ACAL".  ACAL is the gate; the
+# calendar interval only selects which column.  A report that says "1 year
+# since calibration" without saying "and ACAL was run" is claiming something
+# the data sheet does not.
+interval_basis: since_acal
+intervals: [24h, 90d, 1y, 2y]
+default_interval: 1y
+
+# The DC window, relative to Tcal -- see "THE TEMPERATURE DATUM" above.
+# 3458a-datasheet.txt:448-449 (PDF p.12): footnote 4, "For fixed range
+# (> 4 min.), MATH NULL and Tcal +/- 1 C", conditions the 24-hour column;
+# footnote 5, "Tcal +/- 5 C", the other three.  No absolute window is stated
+# by the data sheet and none is invented here -- the centre is what CAL? 59
+# (DCV) or CAL? 60 (OHMS) reads on the unit in front of you.
+temperature:
+  relative_to: cal_temp
+  half_width_c: 5.0
+  half_width_per_interval: {24h: 1.0}
+
+# Option 002 (high stability): the data sheet's parenthesised dc-volts
+# ppm-of-reading figures (p.12 accuracy table, "ppm of reading specifications
+# for high stability (Option 002) are in parentheses").  They are TIGHTER than
+# the standard ones, so an Option 002 unit judged at the standard figures is
+# judged too leniently.  Applied by ModelSpec.with_option("002") /
+# `caldmm-cal-verify --meter-option 002`; the 24-hour column has no
+# parenthesised figure and is unchanged.  tests/cal/test_3458a_extract.py
+# checks every cell against the extract.
+options:
+  "002":
+    DCV:
+      0.1:    {90d: 3.5, 1y: 5.0, 2y: 10.0}
+      1.0:    {90d: 3.1, 1y: 4.0, 2y: 10.0}
+      10.0:   {90d: 2.6, 1y: 4.0, 2y: 10.0}
+      100.0:  {90d: 4.5, 1y: 6.0, 2y: 10.0}
+      1000.0: {90d: 4.5, 1y: 6.0, 2y: 10.0}
+
+notes: >-
+  Keysight 3458A data sheet, pages 12-31.  DC figures are for PRESET and
+  NPLC 100 with autozero on; ohms additionally for OCOMP ON and OHMF; ac
+  figures for PRESET, sinewave input, crest factor 1.4, and LO-to-guard switch
+  on.  Every interval other than 24h additionally requires an ACAL within the
+  last 24 hours and within 1 C of the ACAL temperature.
+
+  AC volts is specified per SETACV technique, and a limit here is only
+  meaningful with the mode named.  The three techniques do not share band
+  edges -- SYNC's first band starts at 1 Hz, ANA's at 10 Hz, RNDM's at 20 Hz --
+  so an unqualified evaluate_limit() at, say, 30 Hz resolves to whichever band
+  happens to start highest, which is arbitrary rather than conservative.  The
+  execution engine sets SETACV explicitly and must pass the same mode here.
+
+functions:
+
+  # ------------------------------------------------------------------ DC V --
+  - quantity: DCV
+    func: DCV
+    connections: [2w]
+    settle_s: 2.0            # operational, not a datasheet number
+    apply: {nplc: 100, autozero: true}
+    note: "Every figure below is written for PRESET, NPLC 100, MATH NULL and a
+           fixed range held more than 4 min, at Tcal +/- 1 C (24h) or Tcal
+           +/- 5 C (90d/1y/2y) -- 3458a-datasheet.txt:447-449, PDF p.12,
+           footnotes 3, 4 and 5.  This code base nulls nothing and re-ranges per
+           point, so every reading is outside them and the data sheet's
+           without-NULL/under-4-minute adder (:454-456) is carried
+           unconditionally as `regime_adder:` on the 10 V, 1 V and 0.1 V
+           ranges.  The 100 V and 1000 V ranges get none: the data sheet
+           states none."
+    # 3458a-datasheet.txt:282-287 (PDF p.9): "AII 3458A accuracy specifications
+    # are relative to the calibration standards ... For DCV, 2 ppm is the
+    # traceability error from the factory", repeated as p.12 footnote 5,
+    # ":458-459": "Add 2 ppm pf reading additional error for factory
+    # traceability to US NIST."  Worked in Example 5, :372-388, PDF p.11,
+    # which adds "(2 ppm x 10 V) = 20 uV" on top of a 58 uV relative error.
+    traceability:
+      ppm_reading: 2.0
+      note: "factory traceability to US NIST; override from this unit's own
+             calibration certificate when it was not calibrated at the factory
+             (3458a-datasheet.txt:286-287, PDF p.9: 'When you recalibrate the
+             3458A, your actual traceability error will depend upon the errors
+             from your calibration standards')"
+    ranges:
+      - fs: 0.1
+        range_arg: 0.1
+        resolution: 1.0e-8            # 10 nV maximum resolution (p.12)
+        input_impedance_ohm: 1.0e+10  # ">10 GOhm" (p.12)
+        overrange: 1.2                # reads to 120.00000 mV (p.12; UG p.273)
+        # 3458a-datasheet.txt:454-456 (PDF p.12): 17 ppm of range is the figure
+        # for "without MATH NULL and for fixed range less than 4 minutes", the
+        # regime every reading here is taken in.  1.7 uV -- larger than the
+        # whole 1-year row at full scale (1.2 uV).  If an adapter ever nulls
+        # each range but still re-ranges inside 4 minutes, this becomes the
+        # other sentence's 0.7 ppm of range; if it also dwells, it goes away.
+        regime_adder: {ppm_range: 17.0, note: "no MATH NULL, fixed range < 4 min"}
+        note: "reads to 120.00000 mV; ppm of range is ppm of 100 mV (p.9 example 1)"
+        limits:
+          24h: {ppm_reading: 2.5, ppm_range: 3.0}
+          90d: {ppm_reading: 5.0, ppm_range: 3.0}
+          1y:  {ppm_reading: 9.0, ppm_range: 3.0}
+          2y:  {ppm_reading: 14.0, ppm_range: 3.0}
+        tempco: {ppm_reading_per_c: 0.15, ppm_range_per_c: 1.0}   # with ACAL
+
+      - fs: 1.0
+        range_arg: 1.0
+        resolution: 1.0e-8            # 10 nV (p.12)
+        input_impedance_ohm: 1.0e+10
+        overrange: 1.2                # reads to 1.20000000 V (p.12; UG p.273)
+        # 3458a-datasheet.txt:454-456 (PDF p.12).  The data sheet gives this
+        # range no "without MATH NULL alone" figure -- only the combined one --
+        # so a nulled-but-not-dwelled adapter would have nothing to fall back
+        # to here and would have to keep this figure.
+        regime_adder: {ppm_range: 1.7, note: "no MATH NULL, fixed range < 4 min"}
+        note: "reads to 1.20000000 V"
+        limits:
+          24h: {ppm_reading: 1.5, ppm_range: 0.3}
+          90d: {ppm_reading: 4.6, ppm_range: 0.3}
+          1y:  {ppm_reading: 8.0, ppm_range: 0.3}
+          2y:  {ppm_reading: 14.0, ppm_range: 0.3}
+        tempco: {ppm_reading_per_c: 0.15, ppm_range_per_c: 0.1}
+
+      - fs: 10.0
+        range_arg: 10.0
+        resolution: 1.0e-7            # 100 nV (p.12)
+        input_impedance_ohm: 1.0e+10
+        overrange: 1.2                # reads to 12.0000000 V (p.12; UG p.273)
+        # 3458a-datasheet.txt:454-456 (PDF p.12).  A nulled-but-not-dwelled
+        # adapter would switch this to the other sentence's 0.15 ppm of range.
+        regime_adder: {ppm_range: 0.25, note: "no MATH NULL, fixed range < 4 min"}
+        note: "reads to 12.0000000 V; the range the 732B/artifact work lives on"
+        limits:
+          24h: {ppm_reading: 0.5, ppm_range: 0.05}
+          90d: {ppm_reading: 4.1, ppm_range: 0.05}
+          1y:  {ppm_reading: 8.0, ppm_range: 0.05}
+          2y:  {ppm_reading: 14.0, ppm_range: 0.05}
+        tempco: {ppm_reading_per_c: 0.15, ppm_range_per_c: 0.01}
+
+      - fs: 100.0
+        range_arg: 100.0
+        resolution: 1.0e-6            # 1 uV (p.12)
+        input_impedance_ohm: 1.0e+7   # 10 MOhm +/-1 % -> real loading error
+        overrange: 1.2                # reads to 120.000000 V (p.12; UG p.273)
+        # No `regime_adder:` -- 3458a-datasheet.txt:454-456 (PDF p.12) names
+        # only 10 V, 1 V and 0.1 V, and inventing one for this range would be
+        # a number the data sheet does not give.
+        note: "reads to 120.000000 V; the data sheet states no MATH NULL adder for
+               this range (3458a-datasheet.txt:454-456, PDF p.12, names only
+               10 V, 1 V and 0.1 V)"
+        limits:
+          24h: {ppm_reading: 2.5, ppm_range: 0.3}
+          90d: {ppm_reading: 6.0, ppm_range: 0.3}
+          1y:  {ppm_reading: 10.0, ppm_range: 0.3}
+          2y:  {ppm_reading: 14.0, ppm_range: 0.3}
+        tempco: {ppm_reading_per_c: 0.15, ppm_range_per_c: 0.1}
+
+      - fs: 1000.0
+        range_arg: 1000.0
+        resolution: 1.0e-5            # 10 uV (p.12)
+        input_impedance_ohm: 1.0e+7
+        overrange: 1.05               # reads to 1050.00000 V (p.12; UG p.273)
+        # Footnote 6, the high-voltage adder: "Add 12 ppm X (Vin / 1000)2
+        # additional error for inputs > 100 vV" (3458a-datasheet.txt:460,
+        # PDF p.12, on the row marked "1000 V6" at :443).  The data sheet does
+        # not say whether the 12 ppm is of reading or of range -- the two agree
+        # at 1000 V and differ 2:1 at 500 V -- so ppm of READING is taken, the
+        # tighter and therefore conservative choice for a DUT tolerance.
+        # 1 year at 1000 V is then 10 + 0.1 + 12 = 22.1 mV, which Keysight's own
+        # 1-year test card corroborates: it allows 23.96 mV there
+        # (3458a-cal-manual.txt:2378, PDF p.78), 1.084x this figure, exactly the
+        # margin its 100 V row shows over the data sheet (1.114 / 1.03 = 1.082).
+        # Without the adder the card would be 2.37x the data sheet, which no
+        # other row is.  A flat ppm_range of 12 would be exact only at 1000 V
+        # and 2-4x too loose below it, which is why this is its own term.
+        ppm_reading_hv: 12.0
+        hv_ref_v: 1000.0
+        hv_above_v: 100.0
+        # No `regime_adder:` here either, for the same reason as 100 V.
+        note: "reads to 1050.00000 V, only 5 % over range; footnote 6's
+               12 ppm x (Vin/1000)^2 above 100 V is carried as ppm_reading_hv.
+               The data sheet states no MATH NULL adder for this range"
+        limits:
+          24h: {ppm_reading: 2.5, ppm_range: 0.1}
+          90d: {ppm_reading: 6.0, ppm_range: 0.1}
+          1y:  {ppm_reading: 10.0, ppm_range: 0.1}
+          2y:  {ppm_reading: 14.0, ppm_range: 0.1}
+        tempco: {ppm_reading_per_c: 0.15, ppm_range_per_c: 0.01}
+
+  # ------------------------------------------------------------------ DC I --
+  # p.21 footnote 6 marks the 100 nA, 1 uA and 10 uA rows TYPICAL ACCURACY.
+  # They are carried so the ranges exist, but a pass/fail verdict against a
+  # typical figure is not a specification verdict; each is flagged in place.
+  - quantity: DCI
+    func: DCI
+    connections: [2w]
+    settle_s: 2.0            # operational, not a datasheet number
+    apply: {nplc: 100, autozero: true}
+    # p.21 footnote 5 (3458a-datasheet.txt:838-839): "Add 5 ppm of reading
+    # additional error for factory traceability to US NIST.  Traceability error
+    # is the sum of the 10 V and 10 kOhm traceability values."  2 + 3 = 5.
+    traceability:
+      ppm_reading: 5.0
+      note: "factory traceability to US NIST, the sum of the 10 V and 10 kohm
+             values; override from this unit's own calibration certificate"
+    ranges:
+      - fs: 1.0e-7
+        range_arg: 1.0e-7
+        resolution: 1.0e-12
+        overrange: 1.2                # reads to 120.000 nA (p.21; UG p.273)
+        typical: true                 # p.21 footnote 6: "Typical accuracy"
+        note: "TYPICAL accuracy only (p.21 footnote 6); 545.2 kOhm shunt, 0.055 V burden"
+        limits:
+          24h: {ppm_reading: 10.0, ppm_range: 400.0}
+          90d: {ppm_reading: 30.0, ppm_range: 400.0}
+          1y:  {ppm_reading: 30.0, ppm_range: 400.0}
+          2y:  {ppm_reading: 35.0, ppm_range: 400.0}
+        tempco: {ppm_reading_per_c: 2.0, ppm_range_per_c: 50.0}
+
+      - fs: 1.0e-6
+        range_arg: 1.0e-6
+        resolution: 1.0e-12
+        overrange: 1.2                # reads to 1.200000 uA (p.21; UG p.273)
+        typical: true                 # p.21 footnote 6: "Typical accuracy"
+        note: "TYPICAL accuracy only (p.21 footnote 6); 45.2 kOhm shunt, 0.045 V burden"
+        limits:
+          24h: {ppm_reading: 10.0, ppm_range: 40.0}
+          90d: {ppm_reading: 15.0, ppm_range: 40.0}
+          1y:  {ppm_reading: 20.0, ppm_range: 40.0}
+          2y:  {ppm_reading: 25.0, ppm_range: 40.0}
+        tempco: {ppm_reading_per_c: 2.0, ppm_range_per_c: 5.0}
+
+      - fs: 1.0e-5
+        range_arg: 1.0e-5
+        resolution: 1.0e-12
+        overrange: 1.2                # reads to 12.000000 uA (p.21; UG p.273)
+        typical: true                 # p.21 footnote 6: "Typical accuracy"
+        note: "TYPICAL accuracy only (p.21 footnote 6); 5.2 kOhm shunt, 0.055 V burden"
+        limits:
+          24h: {ppm_reading: 10.0, ppm_range: 7.0}
+          90d: {ppm_reading: 15.0, ppm_range: 10.0}
+          1y:  {ppm_reading: 20.0, ppm_range: 10.0}
+          2y:  {ppm_reading: 25.0, ppm_range: 10.0}
+        tempco: {ppm_reading_per_c: 2.0, ppm_range_per_c: 1.0}
+
+      - fs: 1.0e-4
+        range_arg: 1.0e-4
+        resolution: 1.0e-11
+        overrange: 1.2                # reads to 120.00000 uA (p.21; UG p.273)
+        note: "730 Ohm shunt, 0.075 V burden"
+        limits:
+          24h: {ppm_reading: 10.0, ppm_range: 6.0}
+          90d: {ppm_reading: 15.0, ppm_range: 8.0}
+          1y:  {ppm_reading: 20.0, ppm_range: 8.0}
+          2y:  {ppm_reading: 25.0, ppm_range: 8.0}
+        tempco: {ppm_reading_per_c: 2.0, ppm_range_per_c: 1.0}
+
+      - fs: 1.0e-3
+        range_arg: 1.0e-3
+        resolution: 1.0e-10
+        overrange: 1.2                # reads to 1.2000000 mA (p.21; UG p.273)
+        note: "100 Ohm shunt, 0.100 V burden"
+        limits:
+          24h: {ppm_reading: 10.0, ppm_range: 4.0}
+          90d: {ppm_reading: 15.0, ppm_range: 5.0}
+          1y:  {ppm_reading: 20.0, ppm_range: 5.0}
+          2y:  {ppm_reading: 25.0, ppm_range: 5.0}
+        tempco: {ppm_reading_per_c: 2.0, ppm_range_per_c: 1.0}
+
+      - fs: 1.0e-2
+        range_arg: 1.0e-2
+        resolution: 1.0e-9
+        overrange: 1.2                # reads to 12.000000 mA (p.21; UG p.273)
+        note: "10 Ohm shunt, 0.100 V burden"
+        limits:
+          24h: {ppm_reading: 10.0, ppm_range: 4.0}
+          90d: {ppm_reading: 15.0, ppm_range: 5.0}
+          1y:  {ppm_reading: 20.0, ppm_range: 5.0}
+          2y:  {ppm_reading: 25.0, ppm_range: 5.0}
+        tempco: {ppm_reading_per_c: 2.0, ppm_range_per_c: 1.0}
+
+      - fs: 0.1
+        range_arg: 0.1
+        resolution: 1.0e-8
+        overrange: 1.2                # reads to 120.00000 mA (p.21; UG p.273)
+        note: "1 Ohm shunt, 0.250 V burden"
+        limits:
+          24h: {ppm_reading: 25.0, ppm_range: 4.0}
+          90d: {ppm_reading: 30.0, ppm_range: 5.0}
+          1y:  {ppm_reading: 35.0, ppm_range: 5.0}
+          2y:  {ppm_reading: 40.0, ppm_range: 5.0}
+        tempco: {ppm_reading_per_c: 2.0, ppm_range_per_c: 1.0}
+
+      - fs: 1.0
+        range_arg: 1.0
+        resolution: 1.0e-7
+        overrange: 1.05               # reads to 1.0500000 A (p.21; UG p.273)
+        note: "0.1 Ohm shunt, <1.5 V burden; reads to 1.0500000 A, only 5 % over range"
+        limits:
+          24h: {ppm_reading: 100.0, ppm_range: 10.0}
+          90d: {ppm_reading: 100.0, ppm_range: 10.0}
+          1y:  {ppm_reading: 110.0, ppm_range: 10.0}
+          2y:  {ppm_reading: 115.0, ppm_range: 10.0}
+        tempco: {ppm_reading_per_c: 2.0, ppm_range_per_c: 2.0}
+
+  # --------------------------------------------------------------- AC I ----
+  # p.33 (3458a-datasheet.txt "AC current (ACI and ACDCI functions)").  ACI
+  # has one rms technique -- the analog converter SETACV ANA uses -- so there
+  # is no mode axis; the frequency columns are the bands.
+  #
+  # Footnote 2: "Specifications apply full scale to 1/20 full scale, for sine
+  # wave inputs, crest factor = 1.4, and following PRESET within 24-hours and
+  # +/- 1 C of last ACAL.  Add 5 ppm of reading additional error for factory
+  # traceability to US NIST."  Full scale is 120 % of the range name (105 %
+  # on 1 A), so 1/20 of it is 0.06 fs (0.0525 fs on 1 A).
+  #
+  # Footnote 3 marks the 5-20 kHz, 20-50 kHz and 50-100 kHz columns TYPICAL
+  # PERFORMANCE.  A typical figure is not a specification and a verdict
+  # cannot be stated against it, so those bands are NOT carried: a point
+  # above 5 kHz is reported unspecified rather than judged.  Footnote 4: "1 kHz
+  # maximum on the 100 uA range", so that range's last band stops at 1 kHz.
+  #
+  # `apply:` pins ACBAND 10 Hz - 100 kHz and NPLC 20.  The p.34 "Low frequency
+  # errors" table charges up to 0.9 % of reading unless ACBAND low is 10 Hz -
+  # 1 kHz with NPLC > 10, in which column every entry is 0; with these two
+  # knobs that adder is zero at every tone the bands below cover, which is why
+  # the table itself need not be carried.  Same arrangement as the Cal
+  # Manual's own ACV verification (ACBAND 10,2E6).
+  - quantity: ACI
+    func: ACI
+    connections: [2w]
+    settle_s: 4.0            # operational, not a datasheet number
+    apply: {nplc: 20, ac_band: [10, 100000]}
+    traceability:
+      ppm_reading: 5.0
+      note: "factory traceability to US NIST, the sum of the 10 V and 10 kohm
+             values (p.33 footnote 2); override from this unit's own
+             calibration certificate"
+    ranges:
+      - fs: 1.0e-4
+        range_arg: 1.0e-4
+        resolution: 1.0e-10           # 100 pA (p.33)
+        overrange: 1.2                # reads to 120.0000 uA
+        min_reading_frac: 0.06        # 1/20 of the 120 uA full scale
+        note: "730 Ohm shunt, 0.1 V burden; 1 kHz maximum (p.33 footnote 4)"
+        bands:
+          - {freq_hz: [10, 20],
+             limits: &LI_100U_A
+               {24h: &TLI_100U_A {pct_reading: 0.4, pct_range: 0.03},
+                90d: *TLI_100U_A, 1y: *TLI_100U_A, 2y: *TLI_100U_A},
+             tempco: &TCI {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [20, 45],
+             limits: &LI_100U_B
+               {24h: &TLI_100U_B {pct_reading: 0.15, pct_range: 0.03},
+                90d: *TLI_100U_B, 1y: *TLI_100U_B, 2y: *TLI_100U_B},
+             tempco: *TCI}
+          - {freq_hz: [45, 100],
+             limits: &LI_100U_C
+               {24h: &TLI_100U_C {pct_reading: 0.06, pct_range: 0.03},
+                90d: *TLI_100U_C, 1y: *TLI_100U_C, 2y: *TLI_100U_C},
+             tempco: *TCI}
+          - {freq_hz: [100, 1000], limits: *LI_100U_C, tempco: *TCI}
+
+      - fs: 1.0e-3
+        range_arg: 1.0e-3
+        resolution: 1.0e-9            # 1 nA (p.33)
+        overrange: 1.2                # reads to 1.200000 mA
+        min_reading_frac: 0.06
+        note: "100 Ohm shunt, 0.1 V burden"
+        bands: &aci_mid_bands
+          - {freq_hz: [10, 20],
+             limits: &LI_MID_A
+               {24h: &TLI_MID_A {pct_reading: 0.4, pct_range: 0.02},
+                90d: *TLI_MID_A, 1y: *TLI_MID_A, 2y: *TLI_MID_A},
+             tempco: *TCI}
+          - {freq_hz: [20, 45],
+             limits: &LI_MID_B
+               {24h: &TLI_MID_B {pct_reading: 0.15, pct_range: 0.02},
+                90d: *TLI_MID_B, 1y: *TLI_MID_B, 2y: *TLI_MID_B},
+             tempco: *TCI}
+          - {freq_hz: [45, 100],
+             limits: &LI_MID_C
+               {24h: &TLI_MID_C {pct_reading: 0.06, pct_range: 0.02},
+                90d: *TLI_MID_C, 1y: *TLI_MID_C, 2y: *TLI_MID_C},
+             tempco: *TCI}
+          - {freq_hz: [100, 5000],
+             limits: &LI_MID_D
+               {24h: &TLI_MID_D {pct_reading: 0.03, pct_range: 0.02},
+                90d: *TLI_MID_D, 1y: *TLI_MID_D, 2y: *TLI_MID_D},
+             tempco: *TCI}
+
+      - fs: 1.0e-2
+        range_arg: 1.0e-2
+        resolution: 1.0e-8            # 10 nA (p.33)
+        overrange: 1.2                # reads to 12.00000 mA
+        min_reading_frac: 0.06
+        note: "10 Ohm shunt, 0.1 V burden"
+        bands: *aci_mid_bands
+
+      - fs: 0.1
+        range_arg: 0.1
+        resolution: 1.0e-7            # 100 nA (p.33)
+        overrange: 1.2                # reads to 120.0000 mA
+        min_reading_frac: 0.06
+        note: "1 Ohm shunt, 0.25 V burden"
+        bands: *aci_mid_bands
+
+      - fs: 1.0
+        range_arg: 1.0
+        resolution: 1.0e-6            # 1 uA (p.33)
+        overrange: 1.05               # reads to 1.050000 A
+        min_reading_frac: 0.0525      # 1/20 of the 1.05 A full scale
+        note: "0.1 Ohm shunt, <1.5 V burden; reads to 1.050000 A"
+        bands:
+          - {freq_hz: [10, 20], limits: *LI_MID_A, tempco: *TCI}
+          - {freq_hz: [20, 45],
+             limits: &LI_1A_B
+               {24h: &TLI_1A_B {pct_reading: 0.16, pct_range: 0.02},
+                90d: *TLI_1A_B, 1y: *TLI_1A_B, 2y: *TLI_1A_B},
+             tempco: *TCI}
+          - {freq_hz: [45, 100],
+             limits: &LI_1A_C
+               {24h: &TLI_1A_C {pct_reading: 0.08, pct_range: 0.02},
+                90d: *TLI_1A_C, 1y: *TLI_1A_C, 2y: *TLI_1A_C},
+             tempco: *TCI}
+          - {freq_hz: [100, 5000],
+             limits: &LI_1A_D
+               {24h: &TLI_1A_D {pct_reading: 0.1, pct_range: 0.02},
+                90d: *TLI_1A_D, 1y: *TLI_1A_D, 2y: *TLI_1A_D},
+             tempco: *TCI}
+
+  # -------------------------------------------------------------- Ohms 2/4w --
+  # p.17 footnote 1: the figures are for OHMF (4-wire) with OCOMP ON.  p.18
+  # gives the 2-wire penalty as a flat offset that GROWS WITH THE INTERVAL --
+  # 50 mOhm at 24 hours, 500 mOhm at two years.  That is why the schema has
+  # adder_per_interval: one figure here would be ten times too loose at 24
+  # hours, which passes a meter that should fail.
+  - quantity: RES
+    connections:
+      4w: {func: OHMF}
+      2w:
+        func: OHM
+        adder_per_interval:
+          24h: {abs_floor: 0.05}
+          90d: {abs_floor: 0.15}
+          1y:  {abs_floor: 0.25}
+          2y:  {abs_floor: 0.50}
+    settle_s: 3.0            # operational, not a datasheet number
+    apply: {nplc: 100, autozero: true, ocomp: true}
+    # p.17 footnote 3 (3458a-datasheet.txt:668-669): "Add 3 ppm of reading
+    # additional error for factory traceability of 10 kOhm to US NIST."  The
+    # data sheet states it at the 10 kohm point; it is the function's figure
+    # because that is the point every other range is derived from.
+    traceability:
+      ppm_reading: 3.0
+      note: "factory traceability of 10 kohm to US NIST; override from this
+             unit's own calibration certificate"
+    # `test_current_a` below is the p.17 "Current source" column, confirmed by
+    # UG Table 3-6 (3458a-user-guide.txt:3051-3060, PDF p.89).  It is here
+    # because a calibrator's resistance uncertainty holds only inside a load-
+    # current window -- the 5700A's is 8-11 mA at 19 ohm -- and reading that
+    # value on this meter's 100 ohm range puts 1 mA through it.  The current
+    # source itself is +/- 3 % absolute (p.17 footnote 7).
+    #
+    # PER-RANGE `apply: {delay_s: ...}` BELOW IS OPERATIONAL, NOT A DATASHEET
+    # NUMBER -- like `settle_s: 3.0` above, nothing in the data sheet or the
+    # user guide states it.  It is `DELAY <seconds>`, the wait the 3458A
+    # inserts between the trigger event and the first sample event, and it is
+    # here to outlast the dielectric absorption of the test leads.  The cable's
+    # insulation keeps discharging long after the step in test voltage, and
+    # that relaxation current adds to (or subtracts from) the range's own test
+    # current until it has decayed.  Two things make it worse as the range
+    # rises, and both are read straight off the `test_current_a` column:
+    #
+    #   * the test current falls 10 mA -> 500 nA across the ladder, four and a
+    #     half decades, so the *same* absolute relaxation current is that many
+    #     decades more of the reading; and
+    #   * the test voltage rises 0.1 V -> 5 V, so there is more charge in the
+    #     dielectric to relax in the first place.
+    #
+    # Dielectric absorption decays roughly logarithmically -- decades of time,
+    # not one RC -- so the delay is stepped by about one notch per decade of
+    # test current rather than scaled in proportion, and it flattens near the
+    # top, where the test current stops falling (500 nA on all three top
+    # ranges) -- the last step there is set by measurement, not by the ladder.
+    #
+    # The ladder was first written with 1.0 s as its ceiling, on the instrument
+    # owner's brief -- "up to 0.5 to 1 second ... don't go with too long delay
+    # though" -- since at 4 samples a point a longer one buys little and costs
+    # the run.  A BENCH MEASUREMENT RAISED THAT CEILING TO 2.0 s, for the
+    # two ranges the meter derives from 10 MOhm in parallel with its own input
+    # (p.17 footnote 4).  The measurement is quoted on the 100 MOhm range
+    # below; 2 s was shown sufficient there, and 1 s was never shown to
+    # be.  1 GOhm takes the same 2.0 s because the data sheet drives it
+    # identically -- 500 nA current source, 5.0 V test, 5 V open circuit
+    # (docs/3458a/3458a-specifications.md:172-173) -- so nothing about that
+    # range lets the cable relax any faster than at 100 MOhm, and a shorter
+    # delay on the higher range would invert the ladder's own rule.  It costs
+    # no run time either: the 5700A's ohms catalogue stops at OHM100M, so no
+    # source on this bench reaches the 1 GOhm range.  10 MOhm keeps 1.0 s -- it
+    # has a 12 V open circuit rather than 5 V and was never compared against a
+    # longer delay.  2.0 s is the ceiling now; anything longer needs its own
+    # two-delay bench comparison first, not an argument.
+    #
+    # These delays do not change `settle_s`: `_settle_seconds` takes the
+    # maximum of the function's 3.0 s and the applied delay, and 2.0 < 3.0.
+    ranges:
+      - fs: 10.0
+        range_arg: 10.0
+        apply: {delay_s: 0.1}   # 10 mA test current -- see the note above
+        resolution: 1.0e-5            # 10 uOhm (p.17)
+        test_current_a: 1.0e-2        # 10 mA (p.17 "Current source"; UG Table 3-6)
+        overrange: 1.2                # reads to 12.00000 Ohm (p.17; UG p.273)
+        note: "10 mA test current, 0.1 V test voltage, 20 Ohm max load resistance"
+        limits:
+          24h: {ppm_reading: 5.0, ppm_range: 3.0}
+          90d: {ppm_reading: 15.0, ppm_range: 5.0}
+          1y:  {ppm_reading: 15.0, ppm_range: 5.0}
+          2y:  {ppm_reading: 20.0, ppm_range: 10.0}
+        tempco: {ppm_reading_per_c: 1.0, ppm_range_per_c: 1.0}
+
+      - fs: 100.0
+        range_arg: 100.0
+        apply: {delay_s: 0.1}   # 1 mA test current -- see the note above
+        resolution: 1.0e-5            # 10 uOhm (p.17)
+        test_current_a: 1.0e-3        # 1 mA (p.17 "Current source"; UG Table 3-6)
+        overrange: 1.2                # reads to 120.00000 Ohm (p.17; UG p.273)
+        note: "1 mA test current, 0.1 V test voltage, 200 Ohm max load resistance"
+        limits:
+          24h: {ppm_reading: 3.0, ppm_range: 3.0}
+          90d: {ppm_reading: 10.0, ppm_range: 5.0}
+          1y:  {ppm_reading: 12.0, ppm_range: 5.0}
+          2y:  {ppm_reading: 20.0, ppm_range: 10.0}
+        tempco: {ppm_reading_per_c: 1.0, ppm_range_per_c: 1.0}
+
+      - fs: 1000.0
+        range_arg: 1000.0
+        apply: {delay_s: 0.15}   # 1 mA test current -- see the note above
+        resolution: 1.0e-4            # 100 uOhm (p.17)
+        test_current_a: 1.0e-3        # 1 mA (p.17 "Current source"; UG Table 3-6)
+        overrange: 1.2                # reads to 1.2000000 kOhm (p.17; UG p.273)
+        note: "1 mA test current, 1.0 V test voltage"
+        limits: &ohm_mid
+          24h: {ppm_reading: 2.0, ppm_range: 0.2}
+          90d: {ppm_reading: 8.0, ppm_range: 0.5}
+          1y:  {ppm_reading: 10.0, ppm_range: 0.5}
+          2y:  {ppm_reading: 15.0, ppm_range: 1.0}
+        tempco: &ohm_mid_tc {ppm_reading_per_c: 1.0, ppm_range_per_c: 0.1}
+
+      - fs: 10000.0
+        range_arg: 10000.0
+        apply: {delay_s: 0.25}   # 100 uA test current -- see the note above
+        resolution: 1.0e-3            # 1 mOhm (p.17)
+        test_current_a: 1.0e-4        # 100 uA (p.17 "Current source"; UG Table 3-6)
+        overrange: 1.2                # reads to 12.000000 kOhm (p.17; UG p.273)
+        note: "100 uA test current, 1.0 V test voltage; the artifact-cal resistance point"
+        limits: *ohm_mid
+        tempco: *ohm_mid_tc
+
+      - fs: 100000.0
+        range_arg: 100000.0
+        apply: {delay_s: 0.4}   # 50 uA test current -- see the note above
+        resolution: 1.0e-2            # 10 mOhm (p.17)
+        test_current_a: 5.0e-5        # 50 uA (p.17 "Current source"; UG Table 3-6)
+        overrange: 1.2                # reads to 120.00000 kOhm (p.17; UG p.273)
+        note: "50 uA test current, 5.0 V test voltage"
+        limits: *ohm_mid
+        tempco: *ohm_mid_tc
+
+      - fs: 1000000.0
+        range_arg: 1000000.0
+        apply: {delay_s: 0.6}   # 5 uA test current -- see the note above
+        resolution: 0.1               # 100 mOhm (p.17)
+        test_current_a: 5.0e-6        # 5 uA (p.17 "Current source"; UG Table 3-6)
+        overrange: 1.2                # reads to 1.2000000 MOhm (p.17; UG p.273)
+        note: "5 uA test current, 5.0 V test voltage"
+        limits:
+          24h: {ppm_reading: 10.0, ppm_range: 1.0}
+          90d: {ppm_reading: 12.0, ppm_range: 2.0}
+          1y:  {ppm_reading: 15.0, ppm_range: 2.0}
+          2y:  {ppm_reading: 20.0, ppm_range: 4.0}
+        tempco: {ppm_reading_per_c: 1.0, ppm_range_per_c: 1.0}
+
+      - fs: 10000000.0
+        range_arg: 10000000.0
+        apply: {delay_s: 1.0}   # 500 nA test current -- see the note above
+        resolution: 1.0               # 1 Ohm (p.17)
+        test_current_a: 5.0e-7        # 500 nA (p.17 "Current source"; UG Table 3-6)
+        overrange: 1.2                # reads to 12.000000 MOhm (p.17; UG p.273)
+        note: "500 nA test current, 5.0 V test voltage"
+        limits:
+          24h: {ppm_reading: 50.0, ppm_range: 5.0}
+          90d: {ppm_reading: 50.0, ppm_range: 10.0}
+          1y:  {ppm_reading: 50.0, ppm_range: 10.0}
+          2y:  {ppm_reading: 75.0, ppm_range: 10.0}
+        tempco: {ppm_reading_per_c: 5.0, ppm_range_per_c: 2.0}
+
+      - fs: 100000000.0
+        range_arg: 100000000.0
+        apply: {delay_s: 2.0}   # 500 nA test current -- see the note above.
+                                #   Raised 1.0 -> 2.0 s on the bench (100 MOhm
+                                #   2-wire from a 5700A): the
+                                #   same point taken at 2 s and at 8 s read
+                                #   +224.838 and +232.856 ppm, so 4x the settling
+                                #   time moved it 8 ppm -- 3.6 % of the deviation,
+                                #   and in the wrong direction for a still-charging
+                                #   cable.  2 s is sufficient here; the +225 ppm is
+                                #   real and not a settling artefact.
+        resolution: 10.0              # 10 Ohm (p.17)
+        test_current_a: 5.0e-7        # 500 nA (p.17 "Current source"; UG Table 3-6)
+        overrange: 1.2                # 1.2 x the range name (p.17; UG p.273)
+        note: "500 nA test current, 5 V open circuit; computed from 10 MOhm in
+               parallel with the input (p.17 footnote 4)"
+        limits:
+          24h: {ppm_reading: 500.0, ppm_range: 10.0}
+          90d: {ppm_reading: 500.0, ppm_range: 10.0}
+          1y:  {ppm_reading: 500.0, ppm_range: 10.0}
+          2y:  {pct_reading: 0.1, ppm_range: 10.0}
+        tempco: {ppm_reading_per_c: 25.0, ppm_range_per_c: 2.0}
+
+      - fs: 1000000000.0
+        range_arg: 1000000000.0
+        apply: {delay_s: 2.0}   # 500 nA test current -- see the note above.
+                                #   Follows the 100 MOhm range, not the 10 MOhm
+                                #   one: p.17 drives both from the same 500 nA
+                                #   source at the same 5.0 V test / 5 V open
+                                #   circuit, and both are computed from 10 MOhm
+                                #   in parallel with the input (footnote 4), so
+                                #   the cable cannot relax faster here than it
+                                #   did at 100 MOhm.  Left at 1.0 s by the
+                                #   2026-08-24 edit that raised only the range
+                                #   it had measured, which inverted the ladder.
+        resolution: 100.0             # 100 Ohm (p.17)
+        test_current_a: 5.0e-7        # 500 nA (p.17 "Current source"; UG Table 3-6)
+        overrange: 1.2                # 1.2 x the range name (p.17; UG p.273)
+        note: "500 nA test current, 5 V open circuit; computed from 10 MOhm in
+               parallel with the input (p.17 footnote 4)"
+        limits:
+          24h: {pct_reading: 0.5, ppm_range: 10.0}
+          90d: {pct_reading: 0.5, ppm_range: 10.0}
+          1y:  {pct_reading: 0.5, ppm_range: 10.0}
+          2y:  {pct_reading: 1.0, ppm_range: 10.0}
+        tempco: {ppm_reading_per_c: 250.0, ppm_range_per_c: 2.0}
+
+  # ------------------------------------------------------------------ AC V --
+  # THE MODE AXIS IS THE POINT.  SETACV picks one of three rms techniques, and
+  # each has its own bandwidth, its own band edges and its own accuracy table
+  # (p.24).  Collapsing them would make a 100 kHz SYNC reading (0.3 % + 0.01 %)
+  # indistinguishable from the same reading in ANA (0.6 % + 0.08 %).
+  #
+  # Each technique further has two accuracy tables, selected by whether the
+  # declared ACBAND reaches above 2 MHz; those are the *_wide modes.  ANA has
+  # no >2 MHz table because its bandwidth stops at 2 MHz.
+  #
+  # THE *_wide MODES ARE RESTRICTED TO 2-10 MHz, and that is deliberate.  The
+  # regime is chosen by the DECLARED BANDWIDTH, not by the tone: the two SYNC
+  # tables are headed "ACBAND <= 2 MHz" (3458a-datasheet.txt:984, PDF p.25)
+  # and "ACBAND > 2 MHz" (:1007), which is why the second one has a 45 Hz to
+  # 100 kHz column at all, and ACBAND's high edge is "the highest expected
+  # frequency component" the operator declares (3458a-user-guide.txt:8679-8686,
+  # PDF p.236).  The execution engine sets ACBAND from the test point's own
+  # frequency, so at any tone at or below 2 MHz the instrument is in the
+  # <= 2 MHz regime and only that regime's rows may be selected.  Left
+  # unrestricted, the planner picked sync_wide for the 10 mV range at 70 kHz
+  # and 200 kHz -- 15 uV and 125 uV against the 51.1 uV and 402 uV that
+  # actually applied, 3.2-3.4x too tight, a false FAIL.  The >2 MHz rows below
+  # 2 MHz stay in the file because they are real data and the extract audits
+  # them; naming the mode explicitly still evaluates them.
+  #
+  # THE LOW EDGE IS 2000001 Hz, NOT 2000000.  The data sheet's regime is
+  # ACBAND *> 2 MHz* and this schema's band and mode edges are INCLUSIVE, so
+  # the strict ">" has to be spelled as +1 Hz.  At exactly 2.000000 MHz the
+  # engine sends ACBAND (2e6, 2e6), which is the "<= 2 MHz" regime -- and
+  # there the 10 mV row is blank above 300 kHz.  With an inclusive 2000000
+  # edge the planner picked sync_wide at exactly 2 MHz and judged a 5 mV
+  # reading against 357 uV, the H10 mechanism in the loose direction.
+  #
+  # BECAUSE THE THREE TECHNIQUES DO NOT SHARE BAND EDGES -- SYNC's first band
+  # starts at 1 Hz, ANA's at 10 Hz, RNDM's at 20 Hz -- there is no defensible
+  # default here, and evaluate_limit() RAISES rather than picking one when no
+  # mode is given at a contested frequency.  (At 30 Hz the highest-low
+  # tie-break would otherwise hand the point to ANA, whose limit is about
+  # fifteen times looser than SYNC's, and a meter actually running SYNC would
+  # pass when it should fail.)  The 34401A's ac filter bands, which are a true
+  # mode partition of one span, keep their conservative default.
+  #
+  # `apply:` carries ac_method only, deliberately NOT ac_band.  ACBAND takes a
+  # (low, high) pair and the data sheet fixes only the HIGH side of the
+  # regime; pinning a low edge here would both invent a number and, because
+  # the 3458A's reading time is set by the ACBAND low edge, make every SYNC
+  # point pay the 1 Hz settling time.  The engine sets ACBAND from the test
+  # point's frequency and must honour the mode note's high-side condition.
+  #
+  # Every ac figure is stated once for "24-hour to 2 year", so all four
+  # intervals of a band carry the same terms; the anchors below are what keeps
+  # each data sheet cell written exactly once.
+  #
+  # tempco is per (technique, range) -- it comes from the range table at the
+  # top of each technique's section, not from the accuracy table -- so it
+  # lives on the bands, and a band that would have grouped two techniques with
+  # different coefficients is split.  Footnote 1 on p.25/p.28/p.30
+  # (3458a-datasheet.txt:997, :1208, :1339): the figure is the additional error
+  # beyond +/- 1 C of the LAST ACAL and within + 5 C of it.  The datum is the
+  # ACAL temperature, NOT Tcal -- there is no Tcal +/- 5 C column on the ac
+  # tables, for any interval -- so an ac run must pass the TEMP? reading taken
+  # right after the ACAL as the tempco reference.  The same footnote adds that
+  # for ACBAND > 2 MHz the 10 mV range coefficient applies to every range,
+  # which is why the *_wide bands all carry 0.002 + 0.02.
+  #
+  # A SECOND, SEPARATE ac tempco exists and is NOT carried: the High frequency
+  # temperature coefficient, "For outside Tcal +/- 5 C add the following error,
+  # (% of reading)/ C" -- 0.02 %/C on 10 mV-1 V and 0.08 %/C on 10 V-1000 V
+  # from 2-4 MHz, 0.08 %/C everywhere from 4-10 MHz (3458a-datasheet.txt:
+  # 1126-1136, PDF p.27, printed again at :1443-1451, PDF p.32).  It is a
+  # different regime with a different datum, and a band has one `tempco:` slot,
+  # so each band a *_wide mode reaches above 2 MHz names it in its `note:`.
+  - quantity: ACV
+    func: ACV
+    connections: [2w]
+    settle_s: 4.0            # operational, not a datasheet number
+    volt_hertz_max: 1.0e+8   # p.30 "Maximum input": Volt-Hz product 1x10^8
+    # All three technique tables state the same traceability adder: "Add 2 ppm
+    # of reading additional error for factory traceability of 10 V DC to US
+    # NIST" (3458a-datasheet.txt:1001-1002, PDF p.25; :1211-1212, p.28;
+    # :1401-1402, p.31).
+    traceability:
+      ppm_reading: 2.0
+      note: "factory traceability of 10 V dc to US NIST; override from this
+             unit's own calibration certificate"
+    modes:
+      - {id: sync, freq_hz: [1, 2000000], apply: {ac_method: SYNC},
+         note: "SETACV SYNC, ACBAND high edge <= 2 MHz -- the most accurate
+                technique, but it requires a repetitive input (p.24)"}
+      - {id: ana, freq_hz: [10, 2000000], apply: {ac_method: ANA},
+         note: "SETACV ANA -- the power-on and post-reset technique, fastest,
+                no repetitive-signal requirement, 10 Hz to 2 MHz (p.24)"}
+      - {id: rndm, freq_hz: [20, 2000000], apply: {ac_method: RNDM},
+         note: "SETACV RNDM, ACBAND high edge <= 2 MHz -- lowest accuracy of
+                the three, suits wideband noise (p.24)"}
+      - {id: sync_wide, freq_hz: [2000001, 10000000], apply: {ac_method: SYNC},
+         note: "SETACV SYNC with the ACBAND high edge above 2 MHz (p.25, lower
+                table).  The table's own rows reach down to 45 Hz, but the
+                regime is only real when ACBAND declares > 2 MHz, and the
+                engine sets ACBAND at the tone -- so this mode is offered only
+                from 2 MHz up, where the <= 2 MHz tables stop"}
+      - {id: rndm_wide, freq_hz: [2000001, 10000000], apply: {ac_method: RNDM},
+         note: "SETACV RNDM with the ACBAND high edge above 2 MHz (p.31,
+                right-hand table); offered only from 2 MHz up, for the same
+                reason as sync_wide"}
+    ranges:
+      # ---------------------------------------------------------- 10 mV ac --
+      # min_reading_frac is a fraction of `fs`, but the data sheet states its
+      # lower validity limit as a fraction of FULL SCALE, 12.00000 mV here,
+      # and each technique states its own:
+      #     SYNC 10 %  of 12 mV = 1.2 mV = 0.12 fs   (p.25 footnote 2,
+      #                                               3458a-datasheet.txt:999)
+      #     ANA  1/4   of 12 mV = 3.0 mV = 0.30 fs   (p.28 footnote 2, :1209 --
+      #                                               the 10 mV row's own; the
+      #                                               other ranges get 1/20)
+      #     RNDM 5 %   of 12 mV = 0.6 mV = 0.06 fs   (p.31 footnote 1, :1400)
+      # Stating them per mode is the point: one per-range figure has to be the
+      # most restrictive, 0.30, and that deleted nine 5700A AC2_2MV points at
+      # 1.98 and 2.2 mV which the SYNC mode the plan itself pins specifies
+      # perfectly well.  `min_reading_frac` stays as the unpinned-mode
+      # fallback, and is still the most restrictive, so it is never optimistic.
+      - fs: 0.01
+        range_arg: 0.01
+        resolution: 1.0e-8            # 10 nV in SYNC and ANA; RNDM is 1 uV (p.30)
+        input_impedance_ohm: 1.0e+6   # 1 MOhm +/-15 % with <140 pF
+        overrange: 1.2                # reads to 12.00000 mV (p.25 "Full scale")
+        min_reading_frac: 0.30
+        min_reading_frac_by_mode:
+          sync: 0.12
+          sync_wide: 0.12
+          ana: 0.30
+          rndm: 0.06
+          rndm_wide: 0.06
+        bands:
+          - {freq_hz: [1, 40], modes: [sync],
+             limits: &L00_003_003   # p.25 SYNC
+               {24h: &TL00_003_003 {pct_reading: 0.03, pct_range: 0.03},
+                90d: *TL00_003_003, 1y: *TL00_003_003, 2y: *TL00_003_003},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [40, 1000], modes: [sync],
+             limits: &L01_002_0011   # p.25 SYNC
+               {24h: &TL01_002_0011 {pct_reading: 0.02, pct_range: 0.011},
+                90d: *TL01_002_0011, 1y: *TL01_002_0011, 2y: *TL01_002_0011},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [1000, 20000], modes: [sync],
+             limits: &L02_003_0011   # p.25 SYNC
+               {24h: &TL02_003_0011 {pct_reading: 0.03, pct_range: 0.011},
+                90d: *TL02_003_0011, 1y: *TL02_003_0011, 2y: *TL02_003_0011},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [20000, 50000], modes: [sync],
+             limits: &L03_01_0011   # p.25 SYNC
+               {24h: &TL03_01_0011 {pct_reading: 0.1, pct_range: 0.011},
+                90d: *TL03_01_0011, 1y: *TL03_01_0011, 2y: *TL03_01_0011},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [50000, 100000], modes: [sync],
+             limits: &L04_05_0011   # p.25 SYNC
+               {24h: &TL04_05_0011 {pct_reading: 0.5, pct_range: 0.011},
+                90d: *TL04_05_0011, 1y: *TL04_05_0011, 2y: *TL04_05_0011},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [100000, 300000], modes: [sync],
+             limits: &L05_40_002   # p.25 SYNC
+               {24h: &TL05_40_002 {pct_reading: 4.0, pct_range: 0.02},
+                90d: *TL05_40_002, 1y: *TL05_40_002, 2y: *TL05_40_002},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [10, 20], modes: [ana],
+             limits: &L06_04_032   # p.28 ANA
+               {24h: &TL06_04_032 {pct_reading: 0.4, pct_range: 0.32},
+                90d: *TL06_04_032, 1y: *TL06_04_032, 2y: *TL06_04_032},
+             tempco: {pct_reading_per_c: 0.003, pct_range_per_c: 0.006}}
+          - {freq_hz: [20, 40], modes: [ana],
+             limits: &L07_015_025   # p.28 ANA
+               {24h: &TL07_015_025 {pct_reading: 0.15, pct_range: 0.25},
+                90d: *TL07_015_025, 1y: *TL07_015_025, 2y: *TL07_015_025},
+             tempco: {pct_reading_per_c: 0.003, pct_range_per_c: 0.006}}
+          - {freq_hz: [40, 100], modes: [ana],
+             limits: &L08_006_025   # p.28 ANA
+               {24h: &TL08_006_025 {pct_reading: 0.06, pct_range: 0.25},
+                90d: *TL08_006_025, 1y: *TL08_006_025, 2y: *TL08_006_025},
+             tempco: {pct_reading_per_c: 0.003, pct_range_per_c: 0.006}}
+          - {freq_hz: [100, 20000], modes: [ana],
+             limits: &L09_002_025   # p.28 ANA
+               {24h: &TL09_002_025 {pct_reading: 0.02, pct_range: 0.25},
+                90d: *TL09_002_025, 1y: *TL09_002_025, 2y: *TL09_002_025},
+             tempco: {pct_reading_per_c: 0.003, pct_range_per_c: 0.006}}
+          - {freq_hz: [20000, 50000], modes: [ana],
+             limits: *L07_015_025,   # p.28 ANA
+             tempco: {pct_reading_per_c: 0.003, pct_range_per_c: 0.006}}
+          - {freq_hz: [50000, 100000], modes: [ana],
+             limits: &L10_07_035   # p.28 ANA
+               {24h: &TL10_07_035 {pct_reading: 0.7, pct_range: 0.35},
+                90d: *TL10_07_035, 1y: *TL10_07_035, 2y: *TL10_07_035},
+             tempco: {pct_reading_per_c: 0.003, pct_range_per_c: 0.006}}
+          - {freq_hz: [100000, 250000], modes: [ana],
+             limits: &L11_40_07   # p.28 ANA
+               {24h: &TL11_40_07 {pct_reading: 4.0, pct_range: 0.7},
+                90d: *TL11_40_07, 1y: *TL11_40_07, 2y: *TL11_40_07},
+             tempco: {pct_reading_per_c: 0.003, pct_range_per_c: 0.006}}
+          - {freq_hz: [20, 100000], modes: [rndm],
+             limits: &L12_05_002   # p.31 RNDM
+               {24h: &TL12_05_002 {pct_reading: 0.5, pct_range: 0.02},
+                90d: *TL12_05_002, 1y: *TL12_05_002, 2y: *TL12_05_002},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [100000, 300000], modes: [rndm],
+             limits: *L05_40_002,   # p.31 RNDM
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [45, 100000], modes: [sync_wide],
+             limits: &L13_009_006   # p.25 SYNC ACBAND>2MHz
+               {24h: &TL13_009_006 {pct_reading: 0.09, pct_range: 0.06},
+                90d: *TL13_009_006, 1y: *TL13_009_006, 2y: *TL13_009_006},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [20, 100000], modes: [rndm_wide],
+             limits: &L14_01_005   # p.31 RNDM ACBAND>2MHz
+               {24h: &TL14_01_005 {pct_reading: 0.1, pct_range: 0.05},
+                90d: *TL14_01_005, 1y: *TL14_01_005, 2y: *TL14_01_005},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [100000, 1000000], modes: [sync_wide, rndm_wide],
+             limits: &L15_12_005   # p.25/p.31 ACBAND>2MHz
+               {24h: &TL15_12_005 {pct_reading: 1.2, pct_range: 0.05},
+                90d: *TL15_12_005, 1y: *TL15_12_005, 2y: *TL15_12_005},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [1000000, 4000000], modes: [sync_wide, rndm_wide],
+             note: "2-4 MHz.  The High frequency temperature coefficient applies
+                    here too for a unit outside Tcal +/- 5 C, and is NOT the
+                    figure in tempco: below --
+                    0.02 %/C of reading on this range, which is in the table's
+                    10 mV to 1 V row (3458a-datasheet.txt:1126-1136, PDF p.27;
+                    :1443-1451, PDF p.32).  tempco: below is the separate,
+                    ACAL-referenced beyond-+/-1 C figure",
+             limits: &L16_70_007   # p.25/p.31 ACBAND>2MHz
+               {24h: &TL16_70_007 {pct_reading: 7.0, pct_range: 0.07},
+                90d: *TL16_70_007, 1y: *TL16_70_007, 2y: *TL16_70_007},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [4000000, 8000000], modes: [sync_wide, rndm_wide],
+             note: "4-8 MHz.  The High frequency temperature coefficient applies
+                    here too for a unit outside Tcal +/- 5 C, and is NOT the
+                    figure in tempco: below --
+                    0.08 %/C of reading on every range from 4 to 10 MHz
+                    (3458a-datasheet.txt:1126-1136, PDF p.27; :1443-1451,
+                    PDF p.32).  tempco: below is the separate,
+                    ACAL-referenced beyond-+/-1 C figure",
+             limits: &L17_200_008   # p.25/p.31 ACBAND>2MHz
+               {24h: &TL17_200_008 {pct_reading: 20.0, pct_range: 0.08},
+                90d: *TL17_200_008, 1y: *TL17_200_008, 2y: *TL17_200_008},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+
+      # ------------------------------------------- 100 mV, 1 V and 10 V ac --
+      # One accuracy block covers all three: every table prints them as a
+      # single "100 mV - 10 V" row, and their temperature coefficients are
+      # equal too, so one anchored band list serves all three.
+      #     SYNC 10 %  of 1.2 x fs = 0.12 fs
+      #     ANA  1/20  of 1.2 x fs = 0.06 fs
+      #     RNDM 5 %   of 1.2 x fs = 0.06 fs   -> most restrictive 0.12
+      - fs: 0.1
+        range_arg: 0.1
+        resolution: 1.0e-8            # 10 nV in SYNC (p.25); ANA 100 nV, RNDM 10 uV
+        input_impedance_ohm: 1.0e+6   # 1 MOhm +/-15 % with <140 pF
+        overrange: 1.2                # reads to 120.00000 mV (p.25 "Full scale")
+        min_reading_frac: 0.12
+        min_reading_frac_by_mode:   # ANA p.28 fn 3 and RNDM p.30 fn 1: 1/20 of full scale
+          sync: 0.12
+          sync_wide: 0.12
+          ana: 0.06
+          rndm: 0.06
+          rndm_wide: 0.06
+        bands: &acv_mid_bands
+          - {freq_hz: [1, 40], modes: [sync],
+             limits: &L18_0007_0004   # p.25 SYNC
+               {24h: &TL18_0007_0004 {pct_reading: 0.007, pct_range: 0.004},
+                90d: *TL18_0007_0004, 1y: *TL18_0007_0004, 2y: *TL18_0007_0004},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [40, 1000], modes: [sync],
+             limits: &L19_0007_0002   # p.25 SYNC
+               {24h: &TL19_0007_0002 {pct_reading: 0.007, pct_range: 0.002},
+                90d: *TL19_0007_0002, 1y: *TL19_0007_0002, 2y: *TL19_0007_0002},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [1000, 20000], modes: [sync],
+             limits: &L20_0014_0002   # p.25 SYNC
+               {24h: &TL20_0014_0002 {pct_reading: 0.014, pct_range: 0.002},
+                90d: *TL20_0014_0002, 1y: *TL20_0014_0002, 2y: *TL20_0014_0002},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [20000, 50000], modes: [sync],
+             limits: &L21_003_0002   # p.25 SYNC
+               {24h: &TL21_003_0002 {pct_reading: 0.03, pct_range: 0.002},
+                90d: *TL21_003_0002, 1y: *TL21_003_0002, 2y: *TL21_003_0002},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [50000, 100000], modes: [sync],
+             limits: &L22_008_0002   # p.25 SYNC
+               {24h: &TL22_008_0002 {pct_reading: 0.08, pct_range: 0.002},
+                90d: *TL22_008_0002, 1y: *TL22_008_0002, 2y: *TL22_008_0002},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [100000, 300000], modes: [sync],
+             limits: &L23_03_001   # p.25 SYNC = p.31 RNDM; tempco p.25
+               {24h: &TL23_03_001 {pct_reading: 0.3, pct_range: 0.01},
+                90d: *TL23_03_001, 1y: *TL23_03_001, 2y: *TL23_03_001},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [100000, 300000], modes: [rndm],
+             limits: *L23_03_001,   # p.25 SYNC = p.31 RNDM; tempco p.30
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 1e-05}}
+          - {freq_hz: [300000, 1000000], modes: [sync],
+             limits: &L24_10_001   # p.25 SYNC = p.31 RNDM; tempco p.25
+               {24h: &TL24_10_001 {pct_reading: 1.0, pct_range: 0.01},
+                90d: *TL24_10_001, 1y: *TL24_10_001, 2y: *TL24_10_001},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [300000, 1000000], modes: [rndm],
+             limits: *L24_10_001,   # p.25 SYNC = p.31 RNDM; tempco p.30
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 1e-05}}
+          - {freq_hz: [1000000, 2000000], modes: [sync],
+             limits: &L25_15_001   # p.25 SYNC = p.31 RNDM; tempco p.25
+               {24h: &TL25_15_001 {pct_reading: 1.5, pct_range: 0.01},
+                90d: *TL25_15_001, 1y: *TL25_15_001, 2y: *TL25_15_001},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [1000000, 2000000], modes: [rndm],
+             limits: *L25_15_001,   # p.25 SYNC = p.31 RNDM; tempco p.30
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 1e-05}}
+          - {freq_hz: [10, 20], modes: [ana],
+             limits: &L26_04_002   # p.28 ANA
+               {24h: &TL26_04_002 {pct_reading: 0.4, pct_range: 0.02},
+                90d: *TL26_04_002, 1y: *TL26_04_002, 2y: *TL26_04_002},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [20, 40], modes: [ana],
+             limits: &L27_015_002   # p.28 ANA
+               {24h: &TL27_015_002 {pct_reading: 0.15, pct_range: 0.02},
+                90d: *TL27_015_002, 1y: *TL27_015_002, 2y: *TL27_015_002},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [40, 100], modes: [ana],
+             limits: &L28_006_001   # p.28 ANA
+               {24h: &TL28_006_001 {pct_reading: 0.06, pct_range: 0.01},
+                90d: *TL28_006_001, 1y: *TL28_006_001, 2y: *TL28_006_001},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [100, 20000], modes: [ana],
+             limits: &L29_002_001   # p.28 ANA
+               {24h: &TL29_002_001 {pct_reading: 0.02, pct_range: 0.01},
+                90d: *TL29_002_001, 1y: *TL29_002_001, 2y: *TL29_002_001},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [20000, 50000], modes: [ana],
+             limits: &L30_015_004   # p.28 ANA
+               {24h: &TL30_015_004 {pct_reading: 0.15, pct_range: 0.04},
+                90d: *TL30_015_004, 1y: *TL30_015_004, 2y: *TL30_015_004},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [50000, 100000], modes: [ana],
+             limits: &L31_06_008   # p.28 ANA
+               {24h: &TL31_06_008 {pct_reading: 0.6, pct_range: 0.08},
+                90d: *TL31_06_008, 1y: *TL31_06_008, 2y: *TL31_06_008},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [100000, 250000], modes: [ana],
+             limits: &L32_20_05   # p.28 ANA
+               {24h: &TL32_20_05 {pct_reading: 2.0, pct_range: 0.5},
+                90d: *TL32_20_05, 1y: *TL32_20_05, 2y: *TL32_20_05},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [250000, 500000], modes: [ana],
+             limits: &L33_30_06   # p.28 ANA
+               {24h: &TL33_30_06 {pct_reading: 3.0, pct_range: 0.6},
+                90d: *TL33_30_06, 1y: *TL33_30_06, 2y: *TL33_30_06},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [500000, 1000000], modes: [ana],
+             limits: &L34_50_20   # p.28 ANA
+               {24h: &TL34_50_20 {pct_reading: 5.0, pct_range: 2.0},
+                90d: *TL34_50_20, 1y: *TL34_50_20, 2y: *TL34_50_20},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [1000000, 2000000], modes: [ana],
+             limits: &L35_100_50   # p.28 ANA
+               {24h: &TL35_100_50 {pct_reading: 10.0, pct_range: 5.0},
+                90d: *TL35_100_50, 1y: *TL35_100_50, 2y: *TL35_100_50},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [20, 100000], modes: [rndm],
+             limits: *L22_008_0002,   # p.31 RNDM
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 1e-05}}
+          - {freq_hz: [45, 100000], modes: [sync_wide],
+             limits: *L13_009_006,   # p.25 SYNC ACBAND>2MHz
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [20, 100000], modes: [rndm_wide],
+             limits: *L14_01_005,   # p.31 RNDM ACBAND>2MHz
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [100000, 1000000], modes: [sync_wide, rndm_wide],
+             limits: &L36_20_005   # p.25/p.31 ACBAND>2MHz
+               {24h: &TL36_20_005 {pct_reading: 2.0, pct_range: 0.05},
+                90d: *TL36_20_005, 1y: *TL36_20_005, 2y: *TL36_20_005},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [1000000, 4000000], modes: [sync_wide, rndm_wide],
+             note: "2-4 MHz.  The High frequency temperature coefficient applies
+                    here too for a unit outside Tcal +/- 5 C, and is NOT the
+                    figure in tempco: below --
+                    0.02 %/C of reading on the 10 mV to 1 V ranges, 0.08 %/C on
+                    10 V to 1000 V (3458a-datasheet.txt:1126-1136, PDF p.27;
+                    :1443-1451, PDF p.32).  tempco: below is the separate,
+                    ACAL-referenced beyond-+/-1 C figure",
+             limits: &L37_40_007   # p.25/p.31 ACBAND>2MHz
+               {24h: &TL37_40_007 {pct_reading: 4.0, pct_range: 0.07},
+                90d: *TL37_40_007, 1y: *TL37_40_007, 2y: *TL37_40_007},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [4000000, 8000000], modes: [sync_wide, rndm_wide],
+             note: "4-8 MHz.  The High frequency temperature coefficient applies
+                    here too for a unit outside Tcal +/- 5 C, and is NOT the
+                    figure in tempco: below --
+                    0.08 %/C of reading on every range from 4 to 10 MHz
+                    (3458a-datasheet.txt:1126-1136, PDF p.27; :1443-1451,
+                    PDF p.32).  tempco: below is the separate,
+                    ACAL-referenced beyond-+/-1 C figure",
+             limits: &L38_40_008   # p.25/p.31 ACBAND>2MHz
+               {24h: &TL38_40_008 {pct_reading: 4.0, pct_range: 0.08},
+                90d: *TL38_40_008, 1y: *TL38_40_008, 2y: *TL38_40_008},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [8000000, 10000000], modes: [sync_wide, rndm_wide],
+             note: "8-10 MHz.  The High frequency temperature coefficient applies
+                    here too for a unit outside Tcal +/- 5 C, and is NOT the
+                    figure in tempco: below --
+                    0.08 %/C of reading on every range from 4 to 10 MHz
+                    (3458a-datasheet.txt:1126-1136, PDF p.27; :1443-1451,
+                    PDF p.32).  tempco: below is the separate,
+                    ACAL-referenced beyond-+/-1 C figure",
+             limits: &L39_150_01   # p.25/p.31 ACBAND>2MHz
+               {24h: &TL39_150_01 {pct_reading: 15.0, pct_range: 0.1},
+                90d: *TL39_150_01, 1y: *TL39_150_01, 2y: *TL39_150_01},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+
+      - fs: 1.0
+        range_arg: 1.0
+        resolution: 1.0e-7            # 100 nV in SYNC (p.25)
+        input_impedance_ohm: 1.0e+6   # 1 MOhm +/-15 % with <140 pF
+        overrange: 1.2                # reads to 1.2000000 V (p.25 "Full scale")
+        min_reading_frac: 0.12
+        min_reading_frac_by_mode:   # ANA p.28 fn 3 and RNDM p.30 fn 1: 1/20 of full scale
+          sync: 0.12
+          sync_wide: 0.12
+          ana: 0.06
+          rndm: 0.06
+          rndm_wide: 0.06
+        bands: *acv_mid_bands
+
+      - fs: 10.0
+        range_arg: 10.0
+        resolution: 1.0e-6            # 1 uV in SYNC (p.25)
+        input_impedance_ohm: 1.0e+6   # 1 MOhm +/-2 % with <140 pF
+        overrange: 1.2                # reads to 12.000000 V (p.25 "Full scale")
+        min_reading_frac: 0.12
+        min_reading_frac_by_mode:   # ANA p.28 fn 3 and RNDM p.30 fn 1: 1/20 of full scale
+          sync: 0.12
+          sync_wide: 0.12
+          ana: 0.06
+          rndm: 0.06
+          rndm_wide: 0.06
+        bands: *acv_mid_bands
+
+      # --------------------------------------------------------- 100 V ac --
+      - fs: 100.0
+        range_arg: 100.0
+        resolution: 1.0e-5            # 10 uV in SYNC (p.25)
+        input_impedance_ohm: 1.0e+6   # 1 MOhm +/-2 % with <140 pF
+        overrange: 1.2                # reads to 120.00000 V (p.25 "Full scale")
+        min_reading_frac: 0.12
+        min_reading_frac_by_mode:   # ANA p.28 fn 3 and RNDM p.30 fn 1: 1/20 of full scale
+          sync: 0.12
+          sync_wide: 0.12
+          ana: 0.06
+          rndm: 0.06
+          rndm_wide: 0.06
+        bands:
+          - {freq_hz: [1, 40], modes: [sync],
+             limits: &L40_002_0004   # p.25 SYNC
+               {24h: &TL40_002_0004 {pct_reading: 0.02, pct_range: 0.004},
+                90d: *TL40_002_0004, 1y: *TL40_002_0004, 2y: *TL40_002_0004},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [40, 1000], modes: [sync],
+             limits: &L41_002_0002   # p.25 SYNC
+               {24h: &TL41_002_0002 {pct_reading: 0.02, pct_range: 0.002},
+                90d: *TL41_002_0002, 1y: *TL41_002_0002, 2y: *TL41_002_0002},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [1000, 20000], modes: [sync],
+             limits: *L41_002_0002,   # p.25 SYNC
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [20000, 50000], modes: [sync],
+             limits: &L42_0035_0002   # p.25 SYNC
+               {24h: &TL42_0035_0002 {pct_reading: 0.035, pct_range: 0.002},
+                90d: *TL42_0035_0002, 1y: *TL42_0035_0002, 2y: *TL42_0035_0002},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [50000, 100000], modes: [sync],
+             limits: &L43_012_0002   # p.25 SYNC
+               {24h: &TL43_012_0002 {pct_reading: 0.12, pct_range: 0.002},
+                90d: *TL43_012_0002, 1y: *TL43_012_0002, 2y: *TL43_012_0002},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [100000, 300000], modes: [sync],
+             limits: &L44_04_001   # p.25 SYNC = p.31 RNDM; tempco p.25
+               {24h: &TL44_04_001 {pct_reading: 0.4, pct_range: 0.01},
+                90d: *TL44_04_001, 1y: *TL44_04_001, 2y: *TL44_04_001},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [100000, 300000], modes: [rndm],
+             limits: *L44_04_001,   # p.25 SYNC = p.31 RNDM; tempco p.30
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 1e-05}}
+          - {freq_hz: [300000, 1000000], modes: [sync],
+             limits: *L25_15_001,   # p.25 SYNC = p.31 RNDM; tempco p.25
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [300000, 1000000], modes: [rndm],
+             limits: *L25_15_001,   # p.25 SYNC = p.31 RNDM; tempco p.30
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 1e-05}}
+          - {freq_hz: [10, 20], modes: [ana],
+             limits: *L26_04_002,   # p.28 ANA
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [20, 40], modes: [ana],
+             limits: *L27_015_002,   # p.28 ANA
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [40, 100], modes: [ana],
+             limits: *L28_006_001,   # p.28 ANA
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [100, 20000], modes: [ana],
+             limits: &L45_003_001   # p.28 ANA
+               {24h: &TL45_003_001 {pct_reading: 0.03, pct_range: 0.01},
+                90d: *TL45_003_001, 1y: *TL45_003_001, 2y: *TL45_003_001},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [20000, 50000], modes: [ana],
+             limits: *L30_015_004,   # p.28 ANA
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [50000, 100000], modes: [ana],
+             limits: *L31_06_008,   # p.28 ANA
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [100000, 250000], modes: [ana],
+             limits: *L32_20_05,   # p.28 ANA
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [250000, 500000], modes: [ana],
+             limits: *L33_30_06,   # p.28 ANA
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [500000, 1000000], modes: [ana],
+             limits: *L34_50_20,   # p.28 ANA
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [20, 100000], modes: [rndm],
+             limits: *L43_012_0002,   # p.31 RNDM
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 1e-05}}
+          - {freq_hz: [20, 100000], modes: [rndm_wide],
+             limits: *L43_012_0002,   # p.31 RNDM ACBAND>2MHz
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [45, 100000], modes: [sync_wide],
+             limits: *L43_012_0002,   # p.25 SYNC ACBAND>2MHz
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+
+      # -------------------------------------------------------- 1000 V ac --
+      # `fs` is the range NAME, 1000 V.  p.9, first paragraph, says so in as
+      # many words and scopes it to ac explicitly: "In ACV and ACl, the
+      # specification is percent of reading plus percent of range.  Range means
+      # the name of the scale, e.g. 1 V, 10 V, etc.; range does not mean the
+      # full-scale reading, e.g. 1.2 V, 12 V, etc."  The usable full scale is
+      # 700.0000 V rms (p.25 "Full scale" column), carried as max_out on every
+      # band, so above it there is no reading rather than a loose one.
+      #     SYNC 10 %  of 700 V = 70 V = 0.07 fs
+      #     ANA  1/20  of 700 V = 35 V = 0.035 fs
+      #     RNDM 5 %   of 700 V = 35 V = 0.035 fs   -> most restrictive 0.07
+      - fs: 1000.0
+        range_arg: 1000.0
+        resolution: 1.0e-4            # 100 uV in SYNC (p.25)
+        input_impedance_ohm: 1.0e+6   # 1 MOhm +/-2 % with <140 pF
+        # No `overrange:` here, unlike every other ac range.  The p.25 "Full
+        # scale" column is 700.0000 V rms, BELOW the range name, so there is
+        # no headroom to claim -- max_out on each band is the real ceiling.
+        # The UG RANGE table prints 1050 V for this row like the dc one
+        # (3458a-user-guide.txt:10254, PDF p.273), but the rated input is
+        # +/- 1000 V pk -- 707 V rms (3458a-datasheet.txt:1312, PDF p.30
+        # "Maximum input") -- and the specification stops at 700 V rms, so the
+        # accuracy table is the figure that governs.
+        min_reading_frac: 0.07
+        min_reading_frac_by_mode:   # ANA p.28 fn 3 and RNDM p.30 fn 1: 1/20 of full scale
+          sync: 0.07
+          sync_wide: 0.07
+          ana: 0.0525
+          rndm: 0.0525
+          rndm_wide: 0.0525
+        note: "full scale is 700.0000 V rms, not 1000 V -- see max_out on each band"
+        bands:
+          - {freq_hz: [1, 40], modes: [sync], max_out: 700.0,
+             limits: &L46_004_0004   # p.25 SYNC
+               {24h: &TL46_004_0004 {pct_reading: 0.04, pct_range: 0.004},
+                90d: *TL46_004_0004, 1y: *TL46_004_0004, 2y: *TL46_004_0004},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [40, 1000], modes: [sync], max_out: 700.0,
+             limits: &L47_004_0002   # p.25 SYNC
+               {24h: &TL47_004_0002 {pct_reading: 0.04, pct_range: 0.002},
+                90d: *TL47_004_0002, 1y: *TL47_004_0002, 2y: *TL47_004_0002},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [1000, 20000], modes: [sync], max_out: 700.0,
+             limits: &L48_006_0002   # p.25 SYNC
+               {24h: &TL48_006_0002 {pct_reading: 0.06, pct_range: 0.002},
+                90d: *TL48_006_0002, 1y: *TL48_006_0002, 2y: *TL48_006_0002},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [20000, 50000], modes: [sync], max_out: 700.0,
+             limits: *L43_012_0002,   # p.25 SYNC
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [50000, 100000], modes: [sync], max_out: 700.0,
+             limits: &L49_03_0002   # p.25 SYNC
+               {24h: &TL49_03_0002 {pct_reading: 0.3, pct_range: 0.002},
+                90d: *TL49_03_0002, 1y: *TL49_03_0002, 2y: *TL49_03_0002},
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 0.0001}}
+          - {freq_hz: [10, 20], modes: [ana], max_out: 700.0,
+             limits: &L50_042_003   # p.28 ANA
+               {24h: &TL50_042_003 {pct_reading: 0.42, pct_range: 0.03},
+                90d: *TL50_042_003, 1y: *TL50_042_003, 2y: *TL50_042_003},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [20, 40], modes: [ana], max_out: 700.0,
+             limits: &L51_017_003   # p.28 ANA
+               {24h: &TL51_017_003 {pct_reading: 0.17, pct_range: 0.03},
+                90d: *TL51_017_003, 1y: *TL51_017_003, 2y: *TL51_017_003},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [40, 100], modes: [ana], max_out: 700.0,
+             limits: &L52_008_002   # p.28 ANA
+               {24h: &TL52_008_002 {pct_reading: 0.08, pct_range: 0.02},
+                90d: *TL52_008_002, 1y: *TL52_008_002, 2y: *TL52_008_002},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [100, 20000], modes: [ana], max_out: 700.0,
+             limits: &L53_006_002   # p.28 ANA
+               {24h: &TL53_006_002 {pct_reading: 0.06, pct_range: 0.02},
+                90d: *TL53_006_002, 1y: *TL53_006_002, 2y: *TL53_006_002},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [20000, 50000], modes: [ana], max_out: 700.0,
+             limits: *L30_015_004,   # p.28 ANA
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [50000, 100000], modes: [ana], max_out: 700.0,
+             limits: &L54_06_02   # p.28 ANA
+               {24h: &TL54_06_02 {pct_reading: 0.6, pct_range: 0.2},
+                90d: *TL54_06_02, 1y: *TL54_06_02, 2y: *TL54_06_02},
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.0}}
+          - {freq_hz: [20, 100000], modes: [rndm], max_out: 700.0,
+             limits: *L23_03_001,   # p.31 RNDM, both ACBAND regimes; tempco p.30
+             tempco: {pct_reading_per_c: 0.001, pct_range_per_c: 1e-05}}
+          - {freq_hz: [20, 100000], modes: [rndm_wide], max_out: 700.0,
+             limits: *L23_03_001,   # p.31 RNDM, both ACBAND regimes; tempco p.30 fn 1
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}
+          - {freq_hz: [45, 100000], modes: [sync_wide], max_out: 700.0,
+             limits: *L23_03_001,   # p.25 SYNC ACBAND>2MHz
+             tempco: {pct_reading_per_c: 0.002, pct_range_per_c: 0.02}}

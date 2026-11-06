@@ -1,0 +1,1782 @@
+# Fluke 5700A / 5720A Series II multifunction calibrator -- specification file.
+#
+# SOURCE.  Fluke 5700A/5720A Series II Remote Programming Guide (a markdown
+# transcription of the Operator and Remote Programming manuals), which is itself sourced from the Operator Manual as amended by change notice
+# MS9 ("replace the entire Specification section").  Sections used:
+#
+#   10        range identifiers (RANGE?, CAL_RNG, CAL_SHIFT?)
+#   11.1-11.2 overall capability, ranges, resolutions, minimum outputs
+#   11.5      settling times
+#   18.1      supported functions and ranges at a glance
+#   18.3      dc voltage accuracy
+#   18.4      ac voltage accuracy
+#   18.5      resistance accuracy
+#   18.6      dc current accuracy
+#   18.7      ac current accuracy
+#
+# Conditions the guide does not reproduce (two-wire adders, load-current
+# windows and their derating constants, the current-squared adders, the
+# temperature window, the stated confidence) are cited against the manual text
+# itself, as `[OM 1996] line N (PDF p.M)`:
+#
+#   [OM 1996]  5700A/5720A Series II Operators Manual, May 1996, PN 601622.
+#              Line numbers refer to a text extract
+#              `5700a-operators-manual-1996.txt` (not shipped).
+#   [MS5]      Operators Manual Supplement issue 5, 1/09; change #1 replaces
+#              OM p.1-42, the wideband page.  Text extract
+#              `5700a-operators-supplement-2009.txt`.
+#   [MS9]      Operators Manual Supplement issue 9, 11/14, "replace the entire
+#              Specification section".  Text extract
+#              `5700a-operators-supplement-2014.txt`.
+#
+# A PDF page is 1 + the number of form feeds before the cited line.
+#
+# ---------------------------------------------------------------------------
+# THE TABLES BELOW ARE A CROSS-CHECK, NOT THE VERDICT
+# ---------------------------------------------------------------------------
+#
+# `limits_authority: instrument`.  Unlike every meter in this directory, this
+# instrument computes its own uncertainty: `UNCERT?` returns the figure for the
+# output actually programmed, honouring CAL_INTV, CAL_CONF, the selected range,
+# the frequency and the calibration temperature, in firmware (guide 18.10:
+# "A driver should not reimplement these accuracy tables ... UNCERT? does it in
+# firmware").  These tables exist so that a run can be planned and validated
+# with no instrument attached, and so that a disagreement between file and
+# firmware is visible rather than silent.  At run time UNCERT? wins.
+#
+# The primary purpose of this file is therefore the ENVELOPE -- which ranges
+# exist, what they are called over the bus, what they can and cannot source --
+# not the accuracy figures.
+#
+# ---------------------------------------------------------------------------
+# WHAT IS AND IS NOT HERE
+# ---------------------------------------------------------------------------
+#
+# CARRIED: the 5700A/5720A's own ranges for dc volts, ac volts, dc current,
+# ac current and resistance, with their guide-10 range identifiers, minimum
+# outputs, resolutions and settling times; the ac frequency bands; the
+# 2.2e7 V-Hz ac ceiling; the 1100 V ac range's 15 Hz - 1 kHz window and its
+# 250 V cap from 15 to 50 Hz; the 9 uA floor on the ac 220 uA range; the
+# 17 standard resistances plus the short, with the connections each allows.
+#
+# NOT CARRIED, and why:
+#  * The 95 % confidence figures.  CAL_CONF selects 99 % or 95 %, and the
+#    schema has one limits axis (the interval).  The 99 % column is the one
+#    printed in full for every range and interval, so it is the one here.  A
+#    run made with CAL_CONF 95 must take UNCERT? as authority -- which it
+#    should anyway.
+#  * Relative uncertainty (the post-CAL_RNG figures) and the secondary
+#    performance / operating-characteristic tables (stability, linearity,
+#    noise, load and line regulation).
+#  * The auxiliary-amplifier ranges (5725A, 5205A, 5215A, 5220A).  They exist
+#    only when BTYPE names an attached amplifier, and the driver's own range
+#    tables exclude them too.
+#  * (No longer true of wideband: the WBV function below carries the
+#    Option 5700A-03 tables from [MS5] change #1 -- see the last section of
+#    this file and docs/5700a/fluke5700a-wideband-specifications.md.  A plan will
+#    only pair wideband points against a meter whose model file also
+#    declares WBV.)
+#  * (No longer true of the temperature window: `temperature:` below carries
+#    the "+/-5 C from calibration temperature" rule as a RELATIVE window whose
+#    centre is CAL_TEMP?, read from the instrument.  The calibration
+#    temperature range itself is 15 C to 35 C, operating 0 C to 50 C, and
+#    neither is a window on these figures.)
+#  * (No longer true of the current-squared adders: the dc 220 mA and 2.2 A
+#    ranges below carry footnote [1]'s +/-200 x I^2 and +/-10 x I^2 ppm.)
+#    Still not carried: the 1.3x (plus 2 uA on ac) penalty when the 220 uA /
+#    2.2 mA ranges are supplied through 5725A terminals.
+#  * (No longer true of the resistance load window: every resistance range
+#    below carries `load_current:` -- IL, IU, IMAX and the manual's derating
+#    constants K.  They are TEST CONDITIONS, not tolerance terms; nothing in
+#    evaluate_limit uses them, and plan generation is what has to.)
+#    Still not carried: compliance voltage, and the ac/dc voltage and current
+#    load limits, which bound a connection rather than a tolerance.
+#  * DC zeros.  The dc voltage specifications require CAL_ZERO at least every
+#    30 days (guide 11.6); fault 1303 flags it.  Check CAL_DAYS? ZERO.
+#
+schema_version: 1
+model_id: fluke5700a
+display_name: "Fluke 5700A/5720A Series II multifunction calibrator"
+role: source
+driver: {module: caldmm.drivers.fluke5700a, cls: Fluke5700A}
+adapter: "caldmm.cal.adapters:Fluke5700ASource"
+
+# A source returns no readings, so it has no invalid-reading sentinel.  Stated
+# explicitly because the schema will not let it be silently absent.  (UNCERT?
+# returns -1.0 to mean "no specification available", which is a query result,
+# not a measurement sentinel, and belongs to the driver.)
+overload_sentinel: null
+
+# Intervals run from the last calibration, and are exactly the four CAL_INTV
+# accepts: 1, 90, 180 and 365 days (guide 18.10).
+interval_basis: since_cal
+limits_authority: instrument
+intervals: [24h, 90d, 180d, 1y]
+default_interval: 1y
+
+# The confidence the transcribed columns are stated at.  [OM 1996] lines
+# 1107-1110 (PDF p.30), section 1-24 "Specification Confidence Levels": "the
+# primary performance specifications ... are provided at both the 99 % and
+# 95 % confidence levels"; line 1213-1214 (PDF p.33): "Fluke guarantees
+# performance verification using specifications stated to 99% confidence
+# level."  Every table below is the 99 % column, so a budget that treats one
+# of these numbers as a rectangular bound over-states it by ~49 %.
+spec_confidence: 0.99
+
+# The window every table in this file is written for.  [OM 1996] line 1220
+# (PDF p.33) and the same header on every primary table: "Absolute Uncertainty
+# / +/- 5 C from calibration temperature"; lines 1301-1302 (PDF p.35), dc
+# voltage secondary note 2: "Temperature coefficient is an adder to
+# uncertainty specifications that does not apply unless operating more than
+# +/-5 C from calibration temperature."
+#
+# The centre is not a constant and is not in this file: it is CAL_TEMP?, the
+# temperature the instrument was last calibrated at, which the runner reads
+# and hands to `window_for(reference_c=...)`.
+#
+# NOT expressible here, and left to the operator: resistance secondary note 2
+# ([OM 1996] lines 2012-2016, PDF p.49) additionally requires CAL_TEMP itself
+# to lie in 19 C - 24 C -- "Calibrate at 26 C: Add 2 C temperature coefficient
+# adder" -- which is a condition on the stored calibration temperature, not on
+# the ambient this window compares against.
+temperature: {relative_to: cal_temp, half_width_c: 5.0}
+
+notes: >-
+  Absolute uncertainty, 99 % confidence, +/-5 C from calibration temperature,
+  after a warm-up of twice the time since last warmed up to a maximum of 30
+  minutes (ONTIME?).  "Absolute uncertainty includes stability, temperature
+  coefficient, linearity, line and load regulation, and the traceability to
+  external standards", so nothing is added to it for a test-uncertainty ratio.
+
+  Resistance is a DISCRETE CATALOGUE, not a continuum: 17 values plus a short,
+  and anything else faults.  Each is sourced as a *characterized* value up to
+  500 ppm from nominal, so the reference for an error computation is what OUT?
+  returns, never the requested nominal.  Every resistance range below carries
+  characterized: true for that reason.
+
+
+functions:
+
+  # ------------------------------------------------------------------ DC V --
+  # guide 18.3, 99 % confidence: +/- (ppm of output + uV).  There is no
+  # "ppm of range" term at all on this instrument -- the second figure is an
+  # absolute floor in volts, which is exactly what abs_floor is for.
+  - quantity: DCV
+    func: DCV
+    connections: [2w]
+    settle_s: 3.0            # guide 11.5; add 1 s for a range or polarity change
+    ranges:
+      - fs: 0.22
+        range_id: DC220MV
+        resolution: 1e-08
+        min_out: 0.0
+        settle_s: 3.0
+        source_impedance_ohm: 50.0
+        note: "50 Ohm output impedance (guide 11.2, 18.3): into a 10 MOhm
+               meter that is 5 ppm, larger than several floors in this file"
+        limits:
+          24h:   {ppm_reading: 6.5, abs_floor: 7.5e-07}
+          90d:   {ppm_reading: 7.0, abs_floor: 7.5e-07}
+          180d:  {ppm_reading: 8.0, abs_floor: 7.5e-07}
+          1y:    {ppm_reading: 9.0, abs_floor: 8e-07}
+
+      - fs: 2.2
+        range_id: DC2_2V
+        resolution: 1e-07
+        min_out: 0.0
+        settle_s: 3.0
+        limits:
+          24h:   {ppm_reading: 3.5, abs_floor: 1.2e-06}
+          90d:   {ppm_reading: 6.0, abs_floor: 1.2e-06}
+          180d:  {ppm_reading: 7.0, abs_floor: 1.2e-06}
+          1y:    {ppm_reading: 8.0, abs_floor: 1.2e-06}
+
+      - fs: 11.0
+        range_id: DC11V
+        resolution: 1e-06
+        min_out: 0.0
+        settle_s: 3.0
+        limits:
+          24h:   {ppm_reading: 3.5, abs_floor: 3e-06}
+          90d:   {ppm_reading: 5.0, abs_floor: 4e-06}
+          180d:  {ppm_reading: 7.0, abs_floor: 4e-06}
+          1y:    {ppm_reading: 8.0, abs_floor: 4e-06}
+
+      - fs: 22.0
+        range_id: DC22V
+        resolution: 1e-06
+        min_out: 0.0
+        settle_s: 3.0
+        limits:
+          24h:   {ppm_reading: 3.5, abs_floor: 6e-06}
+          90d:   {ppm_reading: 5.0, abs_floor: 8e-06}
+          180d:  {ppm_reading: 7.0, abs_floor: 8e-06}
+          1y:    {ppm_reading: 8.0, abs_floor: 8e-06}
+
+      - fs: 220.0
+        range_id: DC220V
+        resolution: 1e-05
+        min_out: 0.0
+        settle_s: 3.0
+        limits:
+          24h:   {ppm_reading: 5.0, abs_floor: 0.0001}
+          90d:   {ppm_reading: 6.0, abs_floor: 0.0001}
+          180d:  {ppm_reading: 8.0, abs_floor: 0.0001}
+          1y:    {ppm_reading: 9.0, abs_floor: 0.0001}
+
+      - fs: 1100.0
+        range_id: DC1100V
+        resolution: 0.0001
+        min_out: 100.0
+        settle_s: 4.0
+        note: "the only dc range with a non-zero minimum output, 100 V
+               (guide 11.2); settle_s already includes its +1 s"
+        limits:
+          24h:   {ppm_reading: 7.0, abs_floor: 0.0006}
+          90d:   {ppm_reading: 8.0, abs_floor: 0.0006}
+          180d:  {ppm_reading: 10.0, abs_floor: 0.0006}
+          1y:    {ppm_reading: 11.0, abs_floor: 0.0006}
+
+  # ------------------------------------------------------------------ DC I --
+  # guide 18.6.  WATCH THE FLOOR UNITS: the table prints nA on the 220 uA,
+  # 2.2 mA and 22 mA rows and uA on the 220 mA and 2.2 A rows.  Everything
+  # below is in amps.
+  - quantity: DCI
+    func: DCI
+    connections: [2w]
+    settle_s: 1.0            # guide 11.5: 1 s for uA/mA, 3 s for 2.2 A
+    ranges:
+      - fs: 0.00022
+        range_id: DC220UA
+        resolution: 1e-10
+        min_out: 0.0
+        settle_s: 1.0
+        limits:
+          24h:   {ppm_reading: 45.0, abs_floor: 1e-08}
+          90d:   {ppm_reading: 50.0, abs_floor: 1e-08}
+          180d:  {ppm_reading: 55.0, abs_floor: 1e-08}
+          1y:    {ppm_reading: 60.0, abs_floor: 1e-08}
+
+      - fs: 0.0022
+        range_id: DC2_2MA
+        resolution: 1e-09
+        min_out: 0.0
+        settle_s: 1.0
+        limits:
+          24h:   {ppm_reading: 45.0, abs_floor: 1e-08}
+          90d:   {ppm_reading: 50.0, abs_floor: 1e-08}
+          180d:  {ppm_reading: 55.0, abs_floor: 1e-08}
+          1y:    {ppm_reading: 60.0, abs_floor: 1e-08}
+
+      - fs: 0.022
+        range_id: DC22MA
+        resolution: 1e-08
+        min_out: 0.0
+        settle_s: 1.0
+        limits:
+          24h:   {ppm_reading: 45.0, abs_floor: 1e-07}
+          90d:   {ppm_reading: 50.0, abs_floor: 1e-07}
+          180d:  {ppm_reading: 55.0, abs_floor: 1e-07}
+          1y:    {ppm_reading: 60.0, abs_floor: 1e-07}
+
+      - fs: 0.22
+        range_id: DC220MA
+        resolution: 1e-07
+        min_out: 0.0
+        settle_s: 1.0
+        # [OM 1996] lines 2176-2178 (PDF p.52), 5700A Series II DC Current
+        # note 1: "Add to uncertainty specifications: +/-200 x I2 ppm for
+        # >100 mA on 220 mA range".  Same footnote in [MS9] lines 1085-1087
+        # (PDF p.19).  I is in amperes, so the coefficient is the manual's own
+        # 200 with isq_ref_a 1 A; "> 100 mA" is strict, which isq_above_a is.
+        #   at 220 mA: 200 x 0.22^2 = 9.68 ppm on top of the row.
+        ppm_reading_isq: 200.0
+        isq_ref_a: 1.0
+        isq_above_a: 0.1
+        limits:
+          24h:   {ppm_reading: 55.0, abs_floor: 1e-06}
+          90d:   {ppm_reading: 60.0, abs_floor: 1e-06}
+          180d:  {ppm_reading: 65.0, abs_floor: 1e-06}
+          1y:    {ppm_reading: 70.0, abs_floor: 1e-06}
+
+      - fs: 2.2
+        range_id: DC2_2A
+        resolution: 1e-06
+        min_out: 0.0
+        settle_s: 3.0
+        note: "compliance 2 V from 1 A to 2.2 A"
+        # [OM 1996] lines 2176-2178 (PDF p.52), note 1: "+/-10 x I2 ppm for
+        # >1 A on 2.2 A range"; [MS9] lines 1085-1087 (PDF p.19).
+        #   at 2.2 A: 10 x 2.2^2 = 48.4 ppm, so the one-year figure is
+        #   143.4 ppm + 30 uA, not 95 ppm + 30 uA -- 345.48 uA rather than
+        #   239 uA, 45 % wider at full scale.
+        ppm_reading_isq: 10.0
+        isq_ref_a: 1.0
+        isq_above_a: 1.0
+        limits:
+          24h:   {ppm_reading: 75.0, abs_floor: 3e-05}
+          90d:   {ppm_reading: 80.0, abs_floor: 3e-05}
+          180d:  {ppm_reading: 90.0, abs_floor: 3e-05}
+          1y:    {ppm_reading: 95.0, abs_floor: 3e-05}
+
+  # ------------------------------------------------------------------ AC V --
+  # guide 18.4.  WATCH THE FLOOR UNITS: uV on every row EXCEPT 220 V and
+  # 1100 V, which the table prints in mV.  Everything below is in volts.
+  #
+  # The envelope constraints a plan validator needs are all here:
+  #   * volt_hertz_max 2.2e7 -- programming outside it is fault 820
+  #   * min_out, 10 % of range on every ac range
+  #   * the 1100 V range exists only from 15 Hz to 1 kHz, and is capped at
+  #     250 V from 15 to 50 Hz (max_out on that band)
+  - quantity: ACV
+    func: ACV
+    connections: [2w]
+    settle_s: 7.0            # guide 11.5 worst case: 7 s below 20 Hz.  Every ac
+                             # range has a 10-20 Hz band, so 7 s is what the
+                             # function must budget; 5 s covers 120 Hz-120 kHz
+                             # and 2 s above 120 kHz only.
+    volt_hertz_max: 2.2e+7   # guide 11.2, [OM Figure A p.1-28]; fault 820 beyond it
+    ranges:
+      - fs: 0.0022
+        range_id: AC2_2MV
+        resolution: 1e-09
+        min_out: 0.00022       # 10 % of range (guide 11.2)
+        source_impedance_ohm: 50.0   # guide 18.4 operating characteristics
+        bands:
+          - freq_hz: [10.0, 20.0]
+            limits:
+              24h:   {ppm_reading: 500.0, abs_floor: 5e-06}
+              90d:   {ppm_reading: 550.0, abs_floor: 5e-06}
+              180d:  {ppm_reading: 600.0, abs_floor: 5e-06}
+              1y:    {ppm_reading: 600.0, abs_floor: 5e-06}
+          - freq_hz: [20.0, 40.0]
+            limits:
+              24h:   {ppm_reading: 200.0, abs_floor: 5e-06}
+              90d:   {ppm_reading: 220.0, abs_floor: 5e-06}
+              180d:  {ppm_reading: 230.0, abs_floor: 5e-06}
+              1y:    {ppm_reading: 240.0, abs_floor: 5e-06}
+          - freq_hz: [40.0, 20000.0]
+            limits:
+              24h:   {ppm_reading: 100.0, abs_floor: 5e-06}
+              90d:   {ppm_reading: 110.0, abs_floor: 5e-06}
+              180d:  {ppm_reading: 120.0, abs_floor: 5e-06}
+              1y:    {ppm_reading: 120.0, abs_floor: 5e-06}
+          - freq_hz: [20000.0, 50000.0]
+            limits:
+              24h:   {ppm_reading: 340.0, abs_floor: 5e-06}
+              90d:   {ppm_reading: 370.0, abs_floor: 5e-06}
+              180d:  {ppm_reading: 390.0, abs_floor: 5e-06}
+              1y:    {ppm_reading: 410.0, abs_floor: 5e-06}
+          - freq_hz: [50000.0, 100000.0]
+            limits:
+              24h:   {ppm_reading: 800.0, abs_floor: 8e-06}
+              90d:   {ppm_reading: 900.0, abs_floor: 8e-06}
+              180d:  {ppm_reading: 950.0, abs_floor: 8e-06}
+              1y:    {ppm_reading: 950.0, abs_floor: 8e-06}
+          - freq_hz: [100000.0, 300000.0]
+            limits:
+              24h:   {ppm_reading: 1100.0, abs_floor: 1.5e-05}
+              90d:   {ppm_reading: 1200.0, abs_floor: 1.5e-05}
+              180d:  {ppm_reading: 1300.0, abs_floor: 1.5e-05}
+              1y:    {ppm_reading: 1300.0, abs_floor: 1.5e-05}
+          - freq_hz: [300000.0, 500000.0]
+            limits:
+              24h:   {ppm_reading: 1500.0, abs_floor: 3e-05}
+              90d:   {ppm_reading: 1700.0, abs_floor: 3e-05}
+              180d:  {ppm_reading: 1700.0, abs_floor: 3e-05}
+              1y:    {ppm_reading: 1800.0, abs_floor: 3e-05}
+          - freq_hz: [500000.0, 1000000.0]
+            limits:
+              24h:   {ppm_reading: 4000.0, abs_floor: 4e-05}
+              90d:   {ppm_reading: 4400.0, abs_floor: 4e-05}
+              180d:  {ppm_reading: 4700.0, abs_floor: 4e-05}
+              1y:    {ppm_reading: 4800.0, abs_floor: 4e-05}
+
+      - fs: 0.022
+        range_id: AC22MV
+        resolution: 1e-08
+        min_out: 0.0022       # 10 % of range (guide 11.2)
+        source_impedance_ohm: 50.0   # guide 18.4 operating characteristics
+        bands:
+          - freq_hz: [10.0, 20.0]
+            limits:
+              24h:   {ppm_reading: 500.0, abs_floor: 6e-06}
+              90d:   {ppm_reading: 550.0, abs_floor: 6e-06}
+              180d:  {ppm_reading: 600.0, abs_floor: 6e-06}
+              1y:    {ppm_reading: 600.0, abs_floor: 6e-06}
+          - freq_hz: [20.0, 40.0]
+            limits:
+              24h:   {ppm_reading: 200.0, abs_floor: 6e-06}
+              90d:   {ppm_reading: 220.0, abs_floor: 6e-06}
+              180d:  {ppm_reading: 230.0, abs_floor: 6e-06}
+              1y:    {ppm_reading: 240.0, abs_floor: 6e-06}
+          - freq_hz: [40.0, 20000.0]
+            limits:
+              24h:   {ppm_reading: 100.0, abs_floor: 6e-06}
+              90d:   {ppm_reading: 110.0, abs_floor: 6e-06}
+              180d:  {ppm_reading: 120.0, abs_floor: 6e-06}
+              1y:    {ppm_reading: 120.0, abs_floor: 6e-06}
+          - freq_hz: [20000.0, 50000.0]
+            limits:
+              24h:   {ppm_reading: 340.0, abs_floor: 6e-06}
+              90d:   {ppm_reading: 370.0, abs_floor: 6e-06}
+              180d:  {ppm_reading: 390.0, abs_floor: 6e-06}
+              1y:    {ppm_reading: 410.0, abs_floor: 6e-06}
+          - freq_hz: [50000.0, 100000.0]
+            limits:
+              24h:   {ppm_reading: 800.0, abs_floor: 8e-06}
+              90d:   {ppm_reading: 900.0, abs_floor: 8e-06}
+              180d:  {ppm_reading: 950.0, abs_floor: 8e-06}
+              1y:    {ppm_reading: 950.0, abs_floor: 8e-06}
+          - freq_hz: [100000.0, 300000.0]
+            limits:
+              24h:   {ppm_reading: 1100.0, abs_floor: 1.5e-05}
+              90d:   {ppm_reading: 1200.0, abs_floor: 1.5e-05}
+              180d:  {ppm_reading: 1300.0, abs_floor: 1.5e-05}
+              1y:    {ppm_reading: 1300.0, abs_floor: 1.5e-05}
+          - freq_hz: [300000.0, 500000.0]
+            limits:
+              24h:   {ppm_reading: 1500.0, abs_floor: 3e-05}
+              90d:   {ppm_reading: 1700.0, abs_floor: 3e-05}
+              180d:  {ppm_reading: 1700.0, abs_floor: 3e-05}
+              1y:    {ppm_reading: 1800.0, abs_floor: 3e-05}
+          - freq_hz: [500000.0, 1000000.0]
+            limits:
+              24h:   {ppm_reading: 4000.0, abs_floor: 4e-05}
+              90d:   {ppm_reading: 4400.0, abs_floor: 4e-05}
+              180d:  {ppm_reading: 4700.0, abs_floor: 4e-05}
+              1y:    {ppm_reading: 4800.0, abs_floor: 4e-05}
+
+      - fs: 0.22
+        range_id: AC220MV
+        resolution: 1e-07
+        min_out: 0.022       # 10 % of range (guide 11.2)
+        source_impedance_ohm: 50.0   # guide 18.4 operating characteristics
+        bands:
+          - freq_hz: [10.0, 20.0]
+            limits:
+              24h:   {ppm_reading: 500.0, abs_floor: 1.6e-05}
+              90d:   {ppm_reading: 550.0, abs_floor: 1.6e-05}
+              180d:  {ppm_reading: 600.0, abs_floor: 1.6e-05}
+              1y:    {ppm_reading: 600.0, abs_floor: 1.6e-05}
+          - freq_hz: [20.0, 40.0]
+            limits:
+              24h:   {ppm_reading: 200.0, abs_floor: 1e-05}
+              90d:   {ppm_reading: 220.0, abs_floor: 1e-05}
+              180d:  {ppm_reading: 230.0, abs_floor: 1e-05}
+              1y:    {ppm_reading: 240.0, abs_floor: 1e-05}
+          - freq_hz: [40.0, 20000.0]
+            limits:
+              24h:   {ppm_reading: 95.0, abs_floor: 1e-05}
+              90d:   {ppm_reading: 100.0, abs_floor: 1e-05}
+              180d:  {ppm_reading: 110.0, abs_floor: 1e-05}
+              1y:    {ppm_reading: 110.0, abs_floor: 1e-05}
+          - freq_hz: [20000.0, 50000.0]
+            limits:
+              24h:   {ppm_reading: 300.0, abs_floor: 1e-05}
+              90d:   {ppm_reading: 330.0, abs_floor: 1e-05}
+              180d:  {ppm_reading: 350.0, abs_floor: 1e-05}
+              1y:    {ppm_reading: 360.0, abs_floor: 1e-05}
+          - freq_hz: [50000.0, 100000.0]
+            limits:
+              24h:   {ppm_reading: 750.0, abs_floor: 3e-05}
+              90d:   {ppm_reading: 800.0, abs_floor: 3e-05}
+              180d:  {ppm_reading: 850.0, abs_floor: 3e-05}
+              1y:    {ppm_reading: 900.0, abs_floor: 3e-05}
+          - freq_hz: [100000.0, 300000.0]
+            limits:
+              24h:   {ppm_reading: 940.0, abs_floor: 3e-05}
+              90d:   {ppm_reading: 1000.0, abs_floor: 3e-05}
+              180d:  {ppm_reading: 1100.0, abs_floor: 3e-05}
+              1y:    {ppm_reading: 1100.0, abs_floor: 3e-05}
+          - freq_hz: [300000.0, 500000.0]
+            limits:
+              24h:   {ppm_reading: 1500.0, abs_floor: 4e-05}
+              90d:   {ppm_reading: 1700.0, abs_floor: 4e-05}
+              180d:  {ppm_reading: 1700.0, abs_floor: 4e-05}
+              1y:    {ppm_reading: 1800.0, abs_floor: 4e-05}
+          - freq_hz: [500000.0, 1000000.0]
+            limits:
+              24h:   {ppm_reading: 3000.0, abs_floor: 0.0001}
+              90d:   {ppm_reading: 3300.0, abs_floor: 0.0001}
+              180d:  {ppm_reading: 3500.0, abs_floor: 0.0001}
+              1y:    {ppm_reading: 3600.0, abs_floor: 0.0001}
+
+      - fs: 2.2
+        range_id: AC2_2V
+        resolution: 1e-06
+        min_out: 0.22       # 10 % of range (guide 11.2)
+        bands:
+          - freq_hz: [10.0, 20.0]
+            limits:
+              24h:   {ppm_reading: 500.0, abs_floor: 0.0001}
+              90d:   {ppm_reading: 550.0, abs_floor: 0.0001}
+              180d:  {ppm_reading: 600.0, abs_floor: 0.0001}
+              1y:    {ppm_reading: 600.0, abs_floor: 0.0001}
+          - freq_hz: [20.0, 40.0]
+            limits:
+              24h:   {ppm_reading: 150.0, abs_floor: 3e-05}
+              90d:   {ppm_reading: 170.0, abs_floor: 3e-05}
+              180d:  {ppm_reading: 170.0, abs_floor: 3e-05}
+              1y:    {ppm_reading: 180.0, abs_floor: 3e-05}
+          - freq_hz: [40.0, 20000.0]
+            limits:
+              24h:   {ppm_reading: 70.0, abs_floor: 7e-06}
+              90d:   {ppm_reading: 75.0, abs_floor: 7e-06}
+              180d:  {ppm_reading: 80.0, abs_floor: 7e-06}
+              1y:    {ppm_reading: 85.0, abs_floor: 7e-06}
+          - freq_hz: [20000.0, 50000.0]
+            limits:
+              24h:   {ppm_reading: 120.0, abs_floor: 2e-05}
+              90d:   {ppm_reading: 130.0, abs_floor: 2e-05}
+              180d:  {ppm_reading: 140.0, abs_floor: 2e-05}
+              1y:    {ppm_reading: 140.0, abs_floor: 2e-05}
+          - freq_hz: [50000.0, 100000.0]
+            limits:
+              24h:   {ppm_reading: 230.0, abs_floor: 8e-05}
+              90d:   {ppm_reading: 250.0, abs_floor: 8e-05}
+              180d:  {ppm_reading: 270.0, abs_floor: 8e-05}
+              1y:    {ppm_reading: 280.0, abs_floor: 8e-05}
+          - freq_hz: [100000.0, 300000.0]
+            limits:
+              24h:   {ppm_reading: 400.0, abs_floor: 0.00015}
+              90d:   {ppm_reading: 440.0, abs_floor: 0.00015}
+              180d:  {ppm_reading: 470.0, abs_floor: 0.00015}
+              1y:    {ppm_reading: 480.0, abs_floor: 0.00015}
+          - freq_hz: [300000.0, 500000.0]
+            limits:
+              24h:   {ppm_reading: 1000.0, abs_floor: 0.0004}
+              90d:   {ppm_reading: 1100.0, abs_floor: 0.0004}
+              180d:  {ppm_reading: 1200.0, abs_floor: 0.0004}
+              1y:    {ppm_reading: 1200.0, abs_floor: 0.0004}
+          - freq_hz: [500000.0, 1000000.0]
+            limits:
+              24h:   {ppm_reading: 2000.0, abs_floor: 0.001}
+              90d:   {ppm_reading: 2200.0, abs_floor: 0.001}
+              180d:  {ppm_reading: 2300.0, abs_floor: 0.001}
+              1y:    {ppm_reading: 2400.0, abs_floor: 0.001}
+
+      - fs: 22.0
+        range_id: AC22V
+        resolution: 1e-05
+        min_out: 2.2       # 10 % of range (guide 11.2)
+        bands:
+          - freq_hz: [10.0, 20.0]
+            limits:
+              24h:   {ppm_reading: 500.0, abs_floor: 0.001}
+              90d:   {ppm_reading: 550.0, abs_floor: 0.001}
+              180d:  {ppm_reading: 600.0, abs_floor: 0.001}
+              1y:    {ppm_reading: 600.0, abs_floor: 0.001}
+          - freq_hz: [20.0, 40.0]
+            limits:
+              24h:   {ppm_reading: 150.0, abs_floor: 0.0003}
+              90d:   {ppm_reading: 170.0, abs_floor: 0.0003}
+              180d:  {ppm_reading: 170.0, abs_floor: 0.0003}
+              1y:    {ppm_reading: 180.0, abs_floor: 0.0003}
+          - freq_hz: [40.0, 20000.0]
+            limits:
+              24h:   {ppm_reading: 70.0, abs_floor: 7e-05}
+              90d:   {ppm_reading: 75.0, abs_floor: 7e-05}
+              180d:  {ppm_reading: 80.0, abs_floor: 7e-05}
+              1y:    {ppm_reading: 85.0, abs_floor: 7e-05}
+          - freq_hz: [20000.0, 50000.0]
+            limits:
+              24h:   {ppm_reading: 120.0, abs_floor: 0.0002}
+              90d:   {ppm_reading: 130.0, abs_floor: 0.0002}
+              180d:  {ppm_reading: 140.0, abs_floor: 0.0002}
+              1y:    {ppm_reading: 140.0, abs_floor: 0.0002}
+          - freq_hz: [50000.0, 100000.0]
+            limits:
+              24h:   {ppm_reading: 230.0, abs_floor: 0.0004}
+              90d:   {ppm_reading: 250.0, abs_floor: 0.0004}
+              180d:  {ppm_reading: 270.0, abs_floor: 0.0004}
+              1y:    {ppm_reading: 280.0, abs_floor: 0.0004}
+          - freq_hz: [100000.0, 300000.0]
+            limits:
+              24h:   {ppm_reading: 500.0, abs_floor: 0.0017}
+              90d:   {ppm_reading: 550.0, abs_floor: 0.0017}
+              180d:  {ppm_reading: 550.0, abs_floor: 0.0017}
+              1y:    {ppm_reading: 600.0, abs_floor: 0.0017}
+          - freq_hz: [300000.0, 500000.0]
+            limits:
+              24h:   {ppm_reading: 1200.0, abs_floor: 0.005}
+              90d:   {ppm_reading: 1300.0, abs_floor: 0.005}
+              180d:  {ppm_reading: 1300.0, abs_floor: 0.005}
+              1y:    {ppm_reading: 1400.0, abs_floor: 0.005}
+          - freq_hz: [500000.0, 1000000.0]
+            limits:
+              24h:   {ppm_reading: 2600.0, abs_floor: 0.009}
+              90d:   {ppm_reading: 2800.0, abs_floor: 0.009}
+              180d:  {ppm_reading: 2900.0, abs_floor: 0.009}
+              1y:    {ppm_reading: 3000.0, abs_floor: 0.009}
+
+      - fs: 220.0
+        range_id: AC220V
+        resolution: 0.0001
+        min_out: 22.0       # 10 % of range (guide 11.2)
+        bands:
+          - freq_hz: [10.0, 20.0]
+            limits:
+              24h:   {ppm_reading: 500.0, abs_floor: 0.01}
+              90d:   {ppm_reading: 550.0, abs_floor: 0.01}
+              180d:  {ppm_reading: 600.0, abs_floor: 0.01}
+              1y:    {ppm_reading: 600.0, abs_floor: 0.01}
+          - freq_hz: [20.0, 40.0]
+            limits:
+              24h:   {ppm_reading: 150.0, abs_floor: 0.003}
+              90d:   {ppm_reading: 170.0, abs_floor: 0.003}
+              180d:  {ppm_reading: 170.0, abs_floor: 0.003}
+              1y:    {ppm_reading: 180.0, abs_floor: 0.003}
+          - freq_hz: [40.0, 20000.0]
+            limits:
+              24h:   {ppm_reading: 75.0, abs_floor: 0.001}
+              90d:   {ppm_reading: 80.0, abs_floor: 0.001}
+              180d:  {ppm_reading: 85.0, abs_floor: 0.001}
+              1y:    {ppm_reading: 90.0, abs_floor: 0.001}
+          - freq_hz: [20000.0, 50000.0]
+            limits:
+              24h:   {ppm_reading: 200.0, abs_floor: 0.004}
+              90d:   {ppm_reading: 220.0, abs_floor: 0.004}
+              180d:  {ppm_reading: 240.0, abs_floor: 0.004}
+              1y:    {ppm_reading: 250.0, abs_floor: 0.004}
+          - freq_hz: [50000.0, 100000.0]
+            limits:
+              24h:   {ppm_reading: 500.0, abs_floor: 0.01}
+              90d:   {ppm_reading: 550.0, abs_floor: 0.01}
+              180d:  {ppm_reading: 600.0, abs_floor: 0.01}
+              1y:    {ppm_reading: 600.0, abs_floor: 0.01}
+          - freq_hz: [100000.0, 300000.0]
+            limits:
+              24h:   {ppm_reading: 1500.0, abs_floor: 0.11}
+              90d:   {ppm_reading: 1500.0, abs_floor: 0.11}
+              180d:  {ppm_reading: 1600.0, abs_floor: 0.11}
+              1y:    {ppm_reading: 1600.0, abs_floor: 0.11}
+          - freq_hz: [300000.0, 500000.0]
+            limits:
+              24h:   {ppm_reading: 5000.0, abs_floor: 0.11}
+              90d:   {ppm_reading: 5200.0, abs_floor: 0.11}
+              180d:  {ppm_reading: 5300.0, abs_floor: 0.11}
+              1y:    {ppm_reading: 5400.0, abs_floor: 0.11}
+          - freq_hz: [500000.0, 1000000.0]
+            limits:
+              24h:   {ppm_reading: 12000.0, abs_floor: 0.22}
+              90d:   {ppm_reading: 12500.0, abs_floor: 0.22}
+              180d:  {ppm_reading: 12500.0, abs_floor: 0.22}
+              1y:    {ppm_reading: 13000.0, abs_floor: 0.22}
+
+      - fs: 1100.0
+        range_id: AC1100V
+        resolution: 0.001
+        min_out: 110.0       # 10 % of range (guide 11.2)
+        settle_s: 9.0
+        note: "15 Hz - 1 kHz only, and 250 V maximum from 15 to 50 Hz
+               (guide 18.1, 18.4 note 1).  settle_s is 7 s (below
+               20 Hz, and this range starts at 15 Hz) plus the 2 s
+               this range adds -- guide 11.5, applied here rather
+               than left as an instruction to a human"
+        bands:
+          - freq_hz: [15.0, 50.0]
+            max_out: 250.0   # guide 18.4 note 1
+            limits:
+              24h:   {ppm_reading: 400.0, abs_floor: 0.02}
+              90d:   {ppm_reading: 420.0, abs_floor: 0.02}
+              180d:  {ppm_reading: 440.0, abs_floor: 0.02}
+              1y:    {ppm_reading: 460.0, abs_floor: 0.02}
+          - freq_hz: [50.0, 1000.0]
+            limits:
+              24h:   {ppm_reading: 75.0, abs_floor: 0.004}
+              90d:   {ppm_reading: 80.0, abs_floor: 0.004}
+              180d:  {ppm_reading: 85.0, abs_floor: 0.004}
+              1y:    {ppm_reading: 90.0, abs_floor: 0.004}
+
+  # ------------------------------------------------------------------ AC I --
+  # guide 18.7.  Floor units are nA on the 220 uA, 2.2 mA and 22 mA rows and
+  # uA on the 220 mA and 2.2 A rows; everything below is in amps.
+  - quantity: ACI
+    func: ACI
+    connections: [2w]
+    settle_s: 5.0            # guide 11.5
+    ranges:
+      - fs: 0.00022
+        range_id: AC220UA
+        resolution: 1e-09
+        min_out: 9e-06     # 9 uA, NOT 10 % of range (guide 11.2)
+        bands:
+          - freq_hz: [10.0, 20.0]
+            limits:
+              24h:   {ppm_reading: 650.0, abs_floor: 3e-08}
+              90d:   {ppm_reading: 700.0, abs_floor: 3e-08}
+              180d:  {ppm_reading: 750.0, abs_floor: 3e-08}
+              1y:    {ppm_reading: 800.0, abs_floor: 3e-08}
+          - freq_hz: [20.0, 40.0]
+            limits:
+              24h:   {ppm_reading: 350.0, abs_floor: 2.5e-08}
+              90d:   {ppm_reading: 380.0, abs_floor: 2.5e-08}
+              180d:  {ppm_reading: 410.0, abs_floor: 2.5e-08}
+              1y:    {ppm_reading: 420.0, abs_floor: 2.5e-08}
+          - freq_hz: [40.0, 1000.0]
+            limits:
+              24h:   {ppm_reading: 120.0, abs_floor: 2e-08}
+              90d:   {ppm_reading: 140.0, abs_floor: 2e-08}
+              180d:  {ppm_reading: 150.0, abs_floor: 2e-08}
+              1y:    {ppm_reading: 160.0, abs_floor: 2e-08}
+          - freq_hz: [1000.0, 5000.0]
+            limits:
+              24h:   {ppm_reading: 500.0, abs_floor: 5e-08}
+              90d:   {ppm_reading: 600.0, abs_floor: 5e-08}
+              180d:  {ppm_reading: 650.0, abs_floor: 5e-08}
+              1y:    {ppm_reading: 700.0, abs_floor: 5e-08}
+          - freq_hz: [5000.0, 10000.0]
+            limits:
+              24h:   {ppm_reading: 1500.0, abs_floor: 1e-07}
+              90d:   {ppm_reading: 1600.0, abs_floor: 1e-07}
+              180d:  {ppm_reading: 1700.0, abs_floor: 1e-07}
+              1y:    {ppm_reading: 1800.0, abs_floor: 1e-07}
+
+      - fs: 0.0022
+        range_id: AC2_2MA
+        resolution: 1e-08
+        min_out: 0.00022       # 10 % of range (guide 11.2)
+        bands:
+          - freq_hz: [10.0, 20.0]
+            limits:
+              24h:   {ppm_reading: 650.0, abs_floor: 5e-08}
+              90d:   {ppm_reading: 700.0, abs_floor: 5e-08}
+              180d:  {ppm_reading: 750.0, abs_floor: 5e-08}
+              1y:    {ppm_reading: 800.0, abs_floor: 5e-08}
+          - freq_hz: [20.0, 40.0]
+            limits:
+              24h:   {ppm_reading: 350.0, abs_floor: 4e-08}
+              90d:   {ppm_reading: 380.0, abs_floor: 4e-08}
+              180d:  {ppm_reading: 410.0, abs_floor: 4e-08}
+              1y:    {ppm_reading: 420.0, abs_floor: 4e-08}
+          - freq_hz: [40.0, 1000.0]
+            limits:
+              24h:   {ppm_reading: 120.0, abs_floor: 4e-08}
+              90d:   {ppm_reading: 140.0, abs_floor: 4e-08}
+              180d:  {ppm_reading: 150.0, abs_floor: 4e-08}
+              1y:    {ppm_reading: 160.0, abs_floor: 4e-08}
+          - freq_hz: [1000.0, 5000.0]
+            limits:
+              24h:   {ppm_reading: 500.0, abs_floor: 5e-07}
+              90d:   {ppm_reading: 600.0, abs_floor: 5e-07}
+              180d:  {ppm_reading: 650.0, abs_floor: 5e-07}
+              1y:    {ppm_reading: 700.0, abs_floor: 5e-07}
+          - freq_hz: [5000.0, 10000.0]
+            limits:
+              24h:   {ppm_reading: 1500.0, abs_floor: 1e-06}
+              90d:   {ppm_reading: 1600.0, abs_floor: 1e-06}
+              180d:  {ppm_reading: 1700.0, abs_floor: 1e-06}
+              1y:    {ppm_reading: 1800.0, abs_floor: 1e-06}
+
+      - fs: 0.022
+        range_id: AC22MA
+        resolution: 1e-07
+        min_out: 0.0022       # 10 % of range (guide 11.2)
+        bands:
+          - freq_hz: [10.0, 20.0]
+            limits:
+              24h:   {ppm_reading: 650.0, abs_floor: 5e-07}
+              90d:   {ppm_reading: 700.0, abs_floor: 5e-07}
+              180d:  {ppm_reading: 750.0, abs_floor: 5e-07}
+              1y:    {ppm_reading: 800.0, abs_floor: 5e-07}
+          - freq_hz: [20.0, 40.0]
+            limits:
+              24h:   {ppm_reading: 350.0, abs_floor: 4e-07}
+              90d:   {ppm_reading: 380.0, abs_floor: 4e-07}
+              180d:  {ppm_reading: 410.0, abs_floor: 4e-07}
+              1y:    {ppm_reading: 420.0, abs_floor: 4e-07}
+          - freq_hz: [40.0, 1000.0]
+            limits:
+              24h:   {ppm_reading: 120.0, abs_floor: 4e-07}
+              90d:   {ppm_reading: 140.0, abs_floor: 4e-07}
+              180d:  {ppm_reading: 150.0, abs_floor: 4e-07}
+              1y:    {ppm_reading: 160.0, abs_floor: 4e-07}
+          - freq_hz: [1000.0, 5000.0]
+            limits:
+              24h:   {ppm_reading: 500.0, abs_floor: 5e-06}
+              90d:   {ppm_reading: 600.0, abs_floor: 5e-06}
+              180d:  {ppm_reading: 650.0, abs_floor: 5e-06}
+              1y:    {ppm_reading: 700.0, abs_floor: 5e-06}
+          - freq_hz: [5000.0, 10000.0]
+            limits:
+              24h:   {ppm_reading: 1500.0, abs_floor: 1e-05}
+              90d:   {ppm_reading: 1600.0, abs_floor: 1e-05}
+              180d:  {ppm_reading: 1700.0, abs_floor: 1e-05}
+              1y:    {ppm_reading: 1800.0, abs_floor: 1e-05}
+
+      - fs: 0.22
+        range_id: AC220MA
+        resolution: 1e-06
+        min_out: 0.022       # 10 % of range (guide 11.2)
+        bands:
+          - freq_hz: [10.0, 20.0]
+            limits:
+              24h:   {ppm_reading: 650.0, abs_floor: 5e-06}
+              90d:   {ppm_reading: 700.0, abs_floor: 5e-06}
+              180d:  {ppm_reading: 750.0, abs_floor: 5e-06}
+              1y:    {ppm_reading: 800.0, abs_floor: 5e-06}
+          - freq_hz: [20.0, 40.0]
+            limits:
+              24h:   {ppm_reading: 350.0, abs_floor: 4e-06}
+              90d:   {ppm_reading: 380.0, abs_floor: 4e-06}
+              180d:  {ppm_reading: 410.0, abs_floor: 4e-06}
+              1y:    {ppm_reading: 420.0, abs_floor: 4e-06}
+          - freq_hz: [40.0, 1000.0]
+            limits:
+              24h:   {ppm_reading: 120.0, abs_floor: 4e-06}
+              90d:   {ppm_reading: 150.0, abs_floor: 4e-06}
+              180d:  {ppm_reading: 170.0, abs_floor: 4e-06}
+              1y:    {ppm_reading: 180.0, abs_floor: 4e-06}
+          - freq_hz: [1000.0, 5000.0]
+            limits:
+              24h:   {ppm_reading: 500.0, abs_floor: 5e-05}
+              90d:   {ppm_reading: 600.0, abs_floor: 5e-05}
+              180d:  {ppm_reading: 650.0, abs_floor: 5e-05}
+              1y:    {ppm_reading: 700.0, abs_floor: 5e-05}
+          - freq_hz: [5000.0, 10000.0]
+            limits:
+              24h:   {ppm_reading: 1500.0, abs_floor: 0.0001}
+              90d:   {ppm_reading: 1600.0, abs_floor: 0.0001}
+              180d:  {ppm_reading: 1700.0, abs_floor: 0.0001}
+              1y:    {ppm_reading: 1800.0, abs_floor: 0.0001}
+
+      - fs: 2.2
+        range_id: AC2_2A
+        resolution: 1e-05
+        min_out: 0.22       # 10 % of range (guide 11.2)
+        note: "this range is specified from 20 Hz, not 10 Hz
+               (guide 18.1, 18.7)"
+        bands:
+          - freq_hz: [20.0, 1000.0]
+            limits:
+              24h:   {ppm_reading: 600.0, abs_floor: 4e-05}
+              90d:   {ppm_reading: 650.0, abs_floor: 4e-05}
+              180d:  {ppm_reading: 700.0, abs_floor: 4e-05}
+              1y:    {ppm_reading: 750.0, abs_floor: 4e-05}
+          - freq_hz: [1000.0, 5000.0]
+            limits:
+              24h:   {ppm_reading: 700.0, abs_floor: 0.0001}
+              90d:   {ppm_reading: 750.0, abs_floor: 0.0001}
+              180d:  {ppm_reading: 800.0, abs_floor: 0.0001}
+              1y:    {ppm_reading: 850.0, abs_floor: 0.0001}
+          - freq_hz: [5000.0, 10000.0]
+            limits:
+              24h:   {ppm_reading: 8000.0, abs_floor: 0.0002}
+              90d:   {ppm_reading: 9000.0, abs_floor: 0.0002}
+              180d:  {ppm_reading: 9500.0, abs_floor: 0.0002}
+              1y:    {ppm_reading: 10000.0, abs_floor: 0.0002}
+
+  # -------------------------------------------------------------- Resistance --
+  # guide 18.5, 99 % confidence, +/- ppm OF THE CHARACTERIZED VALUE.  This is
+  # a discrete catalogue of 17 values plus a short (guide 11.2); anything else
+  # faults.  `characterized: true` on every range is the machine-readable form
+  # of "OUT? is the reference, not the nominal you asked for" -- a 1 Ohm
+  # setting may sit 500 ppm away from 1.000000 Ohm.
+  #
+  # `discrete: true` is the other half of that, and it is the one that bites:
+  # these are 18 catalogue entries, not a ladder.  Without it, select_range's
+  # "smallest range that holds the value" rule sends a characterized 19 kOhm
+  # readback of 19003.8 Ohm to the 100 kOhm entry -- a 16 ppm specification
+  # where 14 ppm applies -- and a 19 MOhm readback to 100 MOhm, where the
+  # four-wire specification does not even exist.  Every step of that ladder is
+  # LOOSER, so every one of them passes a calibrator that should fail.  A
+  # discrete range holds only its own nominal; resolve a readback by range_id.
+  #
+  # Per-range `connections` is not decoration either: four-wire sensing exists
+  # for every value EXCEPT 100 MOhm, and RCOMP two-wire compensation only at
+  # 19 kOhm and below (fault 836 above it).
+  #
+  # THE FIGURES ABOVE ARE FOUR-WIRE.  [OM 1996] line 1952 (PDF p.48), note 1 to
+  # the primary table: "Specifications apply to displayed value. 4-wire
+  # connections, except 100 MOhm."  The two-wire figure is a separate column of
+  # the secondary table, "Two-Wire Adder / Active Compensation [4] / Lead
+  # Resistance 0.1 Ohm, 1 Ohm / +/-mOhm" ([OM 1996] lines 1960-2009,
+  # PDF p.49), and it is carried per range as `connection_adders`, because one
+  # figure cannot cover a table that runs from 2.5 mOhm to 100 mOhm.  Two
+  # readings of that column had to be pinned down:
+  #
+  #  * WHICH LEAD COLUMN.  The 0.1 Ohm column, for three reasons: this bench
+  #    runs Fluke 5440A-7002 low-thermal leads, which are well under 1 Ohm;
+  #    the 5700A is normally the DUT here, and for a DUT the smaller adder is
+  #    the tighter, conservative limit (the 1 Ohm column is 2 mOhm looser on
+  #    0 - 190 Ohm, which could pass a calibrator that should fail); and it is
+  #    the column the audit's own acceptance figures quote.
+  #
+  #    A BENCH WITH HEAVIER LEADS SWITCHES TO THE 1 OHM COLUMN, which is
+  #    4.5 mOhm on 0 - 190 Ohm (i.e. 4 + 4uV/Im) and 15 / 15 / 60 / 120 mOhm
+  #    at 1 k / 1.9 k / 10 k / 19 k.  Both columns are quoted beside every
+  #    range below, so the switch is a one-line edit per range.
+  #  * WHAT Im IS.  The 0 - 190 Ohm rows read "2 + 4uV/Im" mOhm (0.1 Ohm
+  #    leads), where "Im = Current produced by Ohmmeter (A)" -- so the term
+  #    grows as the meter's ohms current falls.  The largest it can be while
+  #    the primary figure still applies at all is at Im = IL = 8 mA (below IL
+  #    the load-current derating below takes over), which is
+  #    4 uV / 8 mA = 0.5 mOhm.  That is what is carried: 2 + 0.5 = 2.5 mOhm.
+  #    A meter sourcing 1 mA into a two-wire compensated point is outside the
+  #    specification twice over.
+  #
+  # Note 4 ([OM 1996] lines 2018-2020, PDF p.49) bounds the whole mechanism:
+  # "Active two-wire compensation may be selected for values less than
+  # 100 kOhm ... limited to 11 mA load, and to 2 V burden.  Two-wire
+  # compensation can be used only with Ohm-meters that source continuous (not
+  # pulsed) dc current."
+  #
+  # THE FIGURES ABOVE ALSO ASSUME A LOAD CURRENT INSIDE IL - IU, the "Full
+  # Spec Load Range" of the same secondary table ([OM 1996] lines 1977-2009,
+  # PDF p.49), whose note 3 says "Refer to current derating factors table for
+  # loads outside of this range".  Each range carries that window and the
+  # constants of the "Current Derating Factors" table ([OM 1996] lines
+  # 2030-2085, PDF p.50) as `load_current:`.  They are TEST CONDITIONS, not
+  # tolerance terms: which current flows depends on the paired meter's ohms
+  # range, which a spec table cannot know, so evaluate_limit ignores them and
+  # plan generation must not.  This matters: a 3458A or a 34401A reads 19 Ohm
+  # at 1 mA where IL is 8 mA, which adds 14 ppm to a 31 ppm one-year figure,
+  # and reads 1 Ohm at 1 mA, which adds 262 ppm to a 110 ppm figure.
+  #
+  # The keys, and the manual's own arithmetic ([OM 1996] lines 2073-2085,
+  # PDF p.50):
+  #
+  #   min_a  max_a  imax_a   IL, IU and IMAX, in AMPERES (SI, like every other
+  #                          physical quantity in this file).
+  #   unit                   the unit I and IL are expressed in for the
+  #                          under-current equation: mA for the short through
+  #                          1.9 kOhm, uA from 10 kOhm up.
+  #   k_under_4w             K in  Error = K(IL - I)/(IL x I)  for I < IL,
+  #                          four-wire.
+  #   k_under_4w_unit        what that error comes out in: ppm everywhere
+  #                          except the short, where the manual says mOhm
+  #                          (a ppm of a 0 Ohm output would be zero).
+  #   k_under_2w             the same K for an ACTIVELY COMPENSATED two-wire
+  #                          connection; always mOhm; blank in the manual
+  #                          exactly where two-wire compensation is not
+  #                          offered, i.e. at 100 kOhm and above.
+  #   over_unit              the unit I and IU are expressed in for the
+  #                          over-current equation -- NOT always the same as
+  #                          `unit`: the manual switches at 1.9 k/10 k for the
+  #                          under-current rule but at 19 k/100 k for the
+  #                          over-current one, so the 10 kOhm and 19 kOhm rows
+  #                          take uA in one equation and mA in the other.
+  #   k_over_4w              K in  Error(ppm) = K(I^2 - IU^2)  for
+  #                          IU < I < IMAX.  Blank for the short and for
+  #                          100 MOhm, whose IU is already IMAX or whose cell
+  #                          the manual leaves empty.
+  #
+  # No settle_s: the manuals never state a resistance settling time.
+  - quantity: RES
+    func: OHMS
+    connections:
+      4w: {}
+      2w:
+        # The manual states no adder for an UNCOMPENSATED two-wire hookup and
+        # this file invents none.  [OM 1996] lines 5226-5231 (PDF p.118): the
+        # active compensation exists "to remove errors introduced by
+        # resistance in the path between the front panel terminals and the
+        # precision resistor", and line 5237 says the plain two-wire hookup of
+        # Figure 4-4B is to be used "only if lead resistances are
+        # insignificant".  So the four-wire figure holds at the terminals and
+        # the lead resistance is the operator's to bound -- not a number the
+        # calibrator guarantees.
+        note: >-
+          uncompensated: the four-wire figure is used unmodified and the lead
+          resistance between the terminals and the meter is the operator's,
+          not the calibrator's ([OM 1996] lines 5236-5238, PDF p.118).  The
+          one exception is 100 MOhm, which has no four-wire mode at all and
+          whose primary-table figure therefore already is the two-wire figure.
+      2w_rcomp: {}
+    ranges:
+      - fs: 0.0
+        range_id: OHM0
+        characterized: true
+        discrete: true
+        connections: [4w, 2w, 2w_rcomp]
+        note: "the short.  fs is genuinely 0, so the whole specification
+               is the 50 uOhm floor -- there is no range term to scale"
+        # Two-wire active-compensation adder: [OM 1996] line 1977
+        #   (PDF p.49): "2 + 4uV/Im" mOhm with 0.1 Ohm leads, and
+        #   4 uV / 8 mA = 0.5 mOhm at Im = IL.  1 Ohm leads: 4.5 mOhm.
+        connection_adders: {2w_rcomp: {abs_floor: 2.5e-3}}
+        # Full-spec load range and IMAX: [OM 1996] line 1977
+        #   (PDF p.49).  Derating K: line 2037 (PDF p.50).
+        # k_under_4w is in mOhm here, not ppm: the manual says
+        # "Error is in mOhm for ... four-wire short".  IU is IMAX,
+        # so the derating table's over-current cell is blank.
+        load_current: {min_a: 8.0e-3, max_a: 500.0e-3, imax_a: 500.0e-3,
+                       unit: mA, k_under_4w: 0.3, k_under_4w_unit: mohm,
+                       k_under_2w: 4.4}
+        limits:
+          24h:   {abs_floor: 5e-05}
+          90d:   {abs_floor: 5e-05}
+          180d:  {abs_floor: 5e-05}
+          1y:    {abs_floor: 5e-05}
+
+      - fs: 1.0
+        range_id: OHM1
+        characterized: true
+        discrete: true
+        connections: [4w, 2w, 2w_rcomp]
+        note: "characterized value may sit up to 500 ppm from nominal"
+        # Two-wire active-compensation adder: [OM 1996] line 1980
+        #   (PDF p.49): "2 + 4uV/Im" mOhm with 0.1 Ohm leads, and
+        #   4 uV / 8 mA = 0.5 mOhm at Im = IL.  1 Ohm leads: 4.5 mOhm.
+        connection_adders: {2w_rcomp: {abs_floor: 2.5e-3}}
+        # Full-spec load range and IMAX: [OM 1996] line 1980
+        #   (PDF p.49).  Derating K: line 2039 (PDF p.50).
+        load_current: {min_a: 8.0e-3, max_a: 100.0e-3, imax_a: 700.0e-3,
+                       unit: mA, k_under_4w: 300.0, k_under_4w_unit: ppm,
+                       k_under_2w: 4.4, over_unit: mA, k_over_4w: 4.0e-5}
+        limits:
+          24h:   {ppm_reading: 85.0}
+          90d:   {ppm_reading: 95.0}
+          180d:  {ppm_reading: 100.0}
+          1y:    {ppm_reading: 110.0}
+
+      - fs: 1.9
+        range_id: OHM1_9
+        characterized: true
+        discrete: true
+        connections: [4w, 2w, 2w_rcomp]
+        note: "characterized value may sit up to 500 ppm from nominal"
+        # Two-wire active-compensation adder: [OM 1996] line 1983
+        #   (PDF p.49): "2 + 4uV/Im" mOhm with 0.1 Ohm leads, and
+        #   4 uV / 8 mA = 0.5 mOhm at Im = IL.  1 Ohm leads: 4.5 mOhm.
+        connection_adders: {2w_rcomp: {abs_floor: 2.5e-3}}
+        # Full-spec load range and IMAX: [OM 1996] line 1983
+        #   (PDF p.49).  Derating K: line 2041 (PDF p.50).
+        load_current: {min_a: 8.0e-3, max_a: 100.0e-3, imax_a: 500.0e-3,
+                       unit: mA, k_under_4w: 160.0, k_under_4w_unit: ppm,
+                       k_under_2w: 4.4, over_unit: mA, k_over_4w: 1.5e-4}
+        limits:
+          24h:   {ppm_reading: 85.0}
+          90d:   {ppm_reading: 95.0}
+          180d:  {ppm_reading: 100.0}
+          1y:    {ppm_reading: 110.0}
+
+      - fs: 10.0
+        range_id: OHM10
+        characterized: true
+        discrete: true
+        connections: [4w, 2w, 2w_rcomp]
+        note: "characterized value may sit up to 300 ppm from nominal"
+        # Two-wire active-compensation adder: [OM 1996] line 1986
+        #   (PDF p.49): "2 + 4uV/Im" mOhm with 0.1 Ohm leads, and
+        #   4 uV / 8 mA = 0.5 mOhm at Im = IL.  1 Ohm leads: 4.5 mOhm.
+        connection_adders: {2w_rcomp: {abs_floor: 2.5e-3}}
+        # Full-spec load range and IMAX: [OM 1996] line 1986
+        #   (PDF p.49).  Derating K: line 2043 (PDF p.50).
+        load_current: {min_a: 8.0e-3, max_a: 11.0e-3, imax_a: 220.0e-3,
+                       unit: mA, k_under_4w: 30.0, k_under_4w_unit: ppm,
+                       k_under_2w: 4.4, over_unit: mA, k_over_4w: 1.6e-3}
+        limits:
+          24h:   {ppm_reading: 26.0}
+          90d:   {ppm_reading: 28.0}
+          180d:  {ppm_reading: 30.0}
+          1y:    {ppm_reading: 33.0}
+
+      - fs: 19.0
+        range_id: OHM19
+        characterized: true
+        discrete: true
+        connections: [4w, 2w, 2w_rcomp]
+        note: "characterized value may sit up to 300 ppm from nominal"
+        # Two-wire active-compensation adder: [OM 1996] line 1989
+        #   (PDF p.49): "2 + 4uV/Im" mOhm with 0.1 Ohm leads, and
+        #   4 uV / 8 mA = 0.5 mOhm at Im = IL.  1 Ohm leads: 4.5 mOhm.
+        connection_adders: {2w_rcomp: {abs_floor: 2.5e-3}}
+        # Full-spec load range and IMAX: [OM 1996] line 1989
+        #   (PDF p.49).  Derating K: line 2045 (PDF p.50).
+        load_current: {min_a: 8.0e-3, max_a: 11.0e-3, imax_a: 160.0e-3,
+                       unit: mA, k_under_4w: 16.0, k_under_4w_unit: ppm,
+                       k_under_2w: 4.4, over_unit: mA, k_over_4w: 3.0e-3}
+        limits:
+          24h:   {ppm_reading: 24.0}
+          90d:   {ppm_reading: 26.0}
+          180d:  {ppm_reading: 28.0}
+          1y:    {ppm_reading: 31.0}
+
+      - fs: 100.0
+        range_id: OHM100
+        characterized: true
+        discrete: true
+        connections: [4w, 2w, 2w_rcomp]
+        # Two-wire active-compensation adder: [OM 1996] line 1992
+        #   (PDF p.49): "2 + 4uV/Im" mOhm with 0.1 Ohm leads, and
+        #   4 uV / 8 mA = 0.5 mOhm at Im = IL.  1 Ohm leads: 4.5 mOhm.
+        connection_adders: {2w_rcomp: {abs_floor: 2.5e-3}}
+        # Full-spec load range and IMAX: [OM 1996] line 1992
+        #   (PDF p.49).  Derating K: line 2047 (PDF p.50).
+        load_current: {min_a: 8.0e-3, max_a: 11.0e-3, imax_a: 70.0e-3,
+                       unit: mA, k_under_4w: 3.5, k_under_4w_unit: ppm,
+                       k_under_2w: 4.4, over_unit: mA, k_over_4w: 1.0e-2}
+        limits:
+          24h:   {ppm_reading: 15.0}
+          90d:   {ppm_reading: 17.0}
+          180d:  {ppm_reading: 18.0}
+          1y:    {ppm_reading: 20.0}
+
+      - fs: 190.0
+        range_id: OHM190
+        characterized: true
+        discrete: true
+        connections: [4w, 2w, 2w_rcomp]
+        # Two-wire active-compensation adder: [OM 1996] line 1995
+        #   (PDF p.49): "2 + 4uV/Im" mOhm with 0.1 Ohm leads, and
+        #   4 uV / 8 mA = 0.5 mOhm at Im = IL.  1 Ohm leads: 4.5 mOhm.
+        connection_adders: {2w_rcomp: {abs_floor: 2.5e-3}}
+        # Full-spec load range and IMAX: [OM 1996] line 1995
+        #   (PDF p.49).  Derating K: line 2049 (PDF p.50).
+        load_current: {min_a: 8.0e-3, max_a: 11.0e-3, imax_a: 50.0e-3,
+                       unit: mA, k_under_4w: 2.5, k_under_4w_unit: ppm,
+                       k_under_2w: 4.4, over_unit: mA, k_over_4w: 1.9e-2}
+        limits:
+          24h:   {ppm_reading: 15.0}
+          90d:   {ppm_reading: 17.0}
+          180d:  {ppm_reading: 18.0}
+          1y:    {ppm_reading: 20.0}
+
+      - fs: 1000.0
+        range_id: OHM1K
+        characterized: true
+        discrete: true
+        connections: [4w, 2w, 2w_rcomp]
+        # Two-wire active-compensation adder: [OM 1996] line 1998
+        #   (PDF p.49), flat "10" mOhm with 0.1 Ohm leads (1 Ohm leads: 15).
+        connection_adders: {2w_rcomp: {abs_floor: 10.0e-3}}
+        # Full-spec load range and IMAX: [OM 1996] line 1998
+        #   (PDF p.49).  Derating K: line 2051 (PDF p.50).
+        load_current: {min_a: 1.0e-3, max_a: 2.0e-3, imax_a: 22.0e-3,
+                       unit: mA, k_under_4w: 0.4, k_under_4w_unit: ppm,
+                       k_under_2w: 4.4, over_unit: mA, k_over_4w: 0.1}
+        limits:
+          24h:   {ppm_reading: 11.0}
+          90d:   {ppm_reading: 12.0}
+          180d:  {ppm_reading: 13.0}
+          1y:    {ppm_reading: 15.0}
+
+      - fs: 1900.0
+        range_id: OHM1_9K
+        characterized: true
+        discrete: true
+        connections: [4w, 2w, 2w_rcomp]
+        # Two-wire active-compensation adder: [OM 1996] line 1999
+        #   (PDF p.49), flat "10" mOhm with 0.1 Ohm leads (1 Ohm leads: 15).
+        connection_adders: {2w_rcomp: {abs_floor: 10.0e-3}}
+        # Full-spec load range and IMAX: [OM 1996] line 1999
+        #   (PDF p.49).  Derating K: line 2053 (PDF p.50).
+        load_current: {min_a: 1.0e-3, max_a: 1.5e-3, imax_a: 16.0e-3,
+                       unit: mA, k_under_4w: 0.4, k_under_4w_unit: ppm,
+                       k_under_2w: 4.4, over_unit: mA, k_over_4w: 0.19}
+        limits:
+          24h:   {ppm_reading: 11.0}
+          90d:   {ppm_reading: 12.0}
+          180d:  {ppm_reading: 13.0}
+          1y:    {ppm_reading: 15.0}
+
+      - fs: 10000.0
+        range_id: OHM10K
+        characterized: true
+        discrete: true
+        connections: [4w, 2w, 2w_rcomp]
+        # Two-wire active-compensation adder: [OM 1996] line 2000
+        #   (PDF p.49), flat "50" mOhm with 0.1 Ohm leads (1 Ohm leads: 60).
+        connection_adders: {2w_rcomp: {abs_floor: 50.0e-3}}
+        # Full-spec load range and IMAX: [OM 1996] line 2000
+        #   (PDF p.49).  Derating K: line 2055 (PDF p.50).
+        load_current: {min_a: 100.0e-6, max_a: 500.0e-6, imax_a: 7.0e-3,
+                       unit: uA, k_under_4w: 50.0, k_under_4w_unit: ppm,
+                       k_under_2w: 5000.0, over_unit: mA, k_over_4w: 2.0}
+        limits:
+          24h:   {ppm_reading: 9.0}
+          90d:   {ppm_reading: 11.0}
+          180d:  {ppm_reading: 12.0}
+          1y:    {ppm_reading: 14.0}
+
+      - fs: 19000.0
+        range_id: OHM19K
+        characterized: true
+        discrete: true
+        connections: [4w, 2w, 2w_rcomp]
+        # Two-wire active-compensation adder: [OM 1996] line 2001
+        #   (PDF p.49), flat "100" mOhm with 0.1 Ohm leads (1 Ohm leads: 120).
+        connection_adders: {2w_rcomp: {abs_floor: 100.0e-3}}
+        # Full-spec load range and IMAX: [OM 1996] line 2001
+        #   (PDF p.49).  Derating K: line 2057 (PDF p.50).
+        load_current: {min_a: 50.0e-6, max_a: 250.0e-6, imax_a: 5.0e-3,
+                       unit: uA, k_under_4w: 50.0, k_under_4w_unit: ppm,
+                       k_under_2w: 5000.0, over_unit: mA, k_over_4w: 3.8}
+        limits:
+          24h:   {ppm_reading: 9.0}
+          90d:   {ppm_reading: 11.0}
+          180d:  {ppm_reading: 12.0}
+          1y:    {ppm_reading: 14.0}
+
+      - fs: 100000.0
+        range_id: OHM100K
+        characterized: true
+        discrete: true
+        connections: [4w, 2w]
+        # Full-spec load range and IMAX: [OM 1996] line 2002
+        #   (PDF p.49).  Derating K: line 2059 (PDF p.50).
+        load_current: {min_a: 10.0e-6, max_a: 100.0e-6, imax_a: 1.0e-3,
+                       unit: uA, k_under_4w: 7.5, k_under_4w_unit: ppm,
+                       over_unit: uA, k_over_4w: 2.0e-5}
+        limits:
+          24h:   {ppm_reading: 11.0}
+          90d:   {ppm_reading: 13.0}
+          180d:  {ppm_reading: 14.0}
+          1y:    {ppm_reading: 16.0}
+
+      - fs: 190000.0
+        range_id: OHM190K
+        characterized: true
+        discrete: true
+        connections: [4w, 2w]
+        # Full-spec load range and IMAX: [OM 1996] line 2004
+        #   (PDF p.49).  Derating K: line 2061 (PDF p.50).
+        load_current: {min_a: 5.0e-6, max_a: 50.0e-6, imax_a: 500.0e-6,
+                       unit: uA, k_under_4w: 4.0, k_under_4w_unit: ppm,
+                       over_unit: uA, k_over_4w: 3.8e-5}
+        limits:
+          24h:   {ppm_reading: 11.0}
+          90d:   {ppm_reading: 13.0}
+          180d:  {ppm_reading: 14.0}
+          1y:    {ppm_reading: 16.0}
+
+      - fs: 1000000.0
+        range_id: OHM1M
+        characterized: true
+        discrete: true
+        connections: [4w, 2w]
+        # Full-spec load range and IMAX: [OM 1996] line 2005
+        #   (PDF p.49).  Derating K: line 2063 (PDF p.50).
+        load_current: {min_a: 5.0e-6, max_a: 20.0e-6, imax_a: 100.0e-6,
+                       unit: uA, k_under_4w: 1.0, k_under_4w_unit: ppm,
+                       over_unit: uA, k_over_4w: 1.5e-4}
+        limits:
+          24h:   {ppm_reading: 16.0}
+          90d:   {ppm_reading: 18.0}
+          180d:  {ppm_reading: 20.0}
+          1y:    {ppm_reading: 23.0}
+
+      - fs: 1900000.0
+        range_id: OHM1_9M
+        characterized: true
+        discrete: true
+        connections: [4w, 2w]
+        # Full-spec load range and IMAX: [OM 1996] line 2006
+        #   (PDF p.49).  Derating K: line 2065 (PDF p.50).
+        load_current: {min_a: 2.5e-6, max_a: 10.0e-6, imax_a: 50.0e-6,
+                       unit: uA, k_under_4w: 0.53, k_under_4w_unit: ppm,
+                       over_unit: uA, k_over_4w: 2.9e-4}
+        limits:
+          24h:   {ppm_reading: 17.0}
+          90d:   {ppm_reading: 19.0}
+          180d:  {ppm_reading: 21.0}
+          1y:    {ppm_reading: 24.0}
+
+      - fs: 10000000.0
+        range_id: OHM10M
+        characterized: true
+        discrete: true
+        connections: [4w, 2w]
+        # Full-spec load range and IMAX: [OM 1996] line 2007
+        #   (PDF p.49).  Derating K: line 2067 (PDF p.50).
+        load_current: {min_a: 0.5e-6, max_a: 2.0e-6, imax_a: 10.0e-6,
+                       unit: uA, k_under_4w: 0.2, k_under_4w_unit: ppm,
+                       over_unit: uA, k_over_4w: 1.0e-3}
+        limits:
+          24h:   {ppm_reading: 33.0}
+          90d:   {ppm_reading: 37.0}
+          180d:  {ppm_reading: 40.0}
+          1y:    {ppm_reading: 46.0}
+
+      - fs: 19000000.0
+        range_id: OHM19M
+        characterized: true
+        discrete: true
+        connections: [4w, 2w]
+        # Full-spec load range and IMAX: [OM 1996] line 2008
+        #   (PDF p.49).  Derating K: line 2069 (PDF p.50).
+        load_current: {min_a: 0.25e-6, max_a: 1.0e-6, imax_a: 5.0e-6,
+                       unit: uA, k_under_4w: 0.53, k_under_4w_unit: ppm,
+                       over_unit: uA, k_over_4w: 1.9e-3}
+        limits:
+          24h:   {ppm_reading: 43.0}
+          90d:   {ppm_reading: 47.0}
+          180d:  {ppm_reading: 50.0}
+          1y:    {ppm_reading: 55.0}
+
+      - fs: 100000000.0
+        range_id: OHM100M
+        characterized: true
+        discrete: true
+        connections: [2w]
+        note: "no four-wire sensing on this value (guide 18.5)"
+        # Full-spec load range and IMAX: [OM 1996] line 2009
+        #   (PDF p.49).  Derating K: line 2071 (PDF p.50).
+        # The derating table's column is headed "Four-Wire", but
+        # this value has no four-wire mode ([OM 1996] line 1952);
+        # it is the only K the manual gives for it.  Its
+        # over-current cell is blank.
+        load_current: {min_a: 50.0e-9, max_a: 200.0e-9, imax_a: 1.0e-6,
+                       unit: uA, k_under_4w: 0.1, k_under_4w_unit: ppm}
+        limits:
+          24h:   {ppm_reading: 110.0}
+          90d:   {ppm_reading: 120.0}
+          180d:  {ppm_reading: 125.0}
+          1y:    {ppm_reading: 130.0}
+
+  # ----------------------------------------------------------------- WBV ---
+  # Wideband ac voltage, Option 5700A-03 ([MS5] change #1, which replaces
+  # OM p.1-42 entirely -- see docs/5700a/fluke5700a-wideband-specifications.md for
+  # the transcription and the band arithmetic).  99 % confidence, +/-5 C from
+  # calibration temperature, specified TO THE END OF THE CABLE AND ITS 50 OHM
+  # TERMINATION.  Each band is the absolute-uncertainty row (stated for
+  # 30 Hz - 500 kHz) plus the amplitude-flatness row for frequencies outside
+  # it, floors added linearly.
+  #
+  # Footnote [1] of the flatness table ([MS5] lines 66-67, PDF p.2; [MS9]
+  # lines 1467-1468, PDF p.26) -- "For output voltages < 50 % of full range in
+  # the 33 mV, 110 mV, 330 mV, 1.1 V, and 3.5 V ranges, add 0.1 % to the
+  # amplitude flatness specification" -- is carried as a `below_frac_adder` on
+  # each band of those five ranges.  It is stated per BAND, not per range, and
+  # deliberately: it adds to the *amplitude flatness* specification, and the
+  # 30 Hz - 500 kHz band is the one band whose limit uses no flatness row at
+  # all (it is the band the absolute-uncertainty table is stated for).  The
+  # three ranges the footnote does not name -- 1.1 mV, 3.3 mV, 11 mV -- carry
+  # no adder anywhere.
+  #
+  # NOT carried: the flatness tempco column, harmonic distortion.  A coaxial
+  # 50 ohm output: two-wire only, no external sense, no rcomp.
+  #
+  # `source_impedance_ohm: 50` below is the truth about the hardware, but --
+  # unlike the millivolt ranges of DCV/ACV -- it must NOT drive an input-loading
+  # correction: "Specifications apply to the end of the cable and 50 Ohm
+  # termination used for calibration" ([OM 1996] line 2528, PDF p.60; [MS9]
+  # line 1431, PDF p.26), so the load is already inside the stated value and
+  # dividing it out again would be a bias, not a correction.
+  # `cal.engine._loading` excludes WBV for exactly that reason (L83).
+  - quantity: WBV
+    func: WBV
+    connections: [2w]
+    settle_s: 7.0            # < 120 Hz; 5 s to 1.2 MHz, 0.5 s above
+    ranges:
+      - fs: 0.0011
+        range_id: WB1_1MV
+        resolution: 1e-08
+        min_out: 0.0003     # 300 uV (-57 dBm) overall minimum
+        source_impedance_ohm: 50.0
+        bands:
+          - freq_hz: [10, 30]
+            limits:
+              24h:   {ppm_reading: 7000, abs_floor: 4e-07}
+              90d:   {ppm_reading: 8000, abs_floor: 4e-07}
+              180d:  {ppm_reading: 9000, abs_floor: 4e-07}
+              1y:    {ppm_reading: 11000, abs_floor: 2e-06}
+          - freq_hz: [30, 500000]
+            limits:
+              24h:   {ppm_reading: 4000, abs_floor: 4e-07}
+              90d:   {ppm_reading: 5000, abs_floor: 4e-07}
+              180d:  {ppm_reading: 6000, abs_floor: 4e-07}
+              1y:    {ppm_reading: 8000, abs_floor: 2e-06}
+          - freq_hz: [500000, 2e+06]
+            limits:
+              24h:   {ppm_reading: 6000, abs_floor: 3.4e-06}
+              90d:   {ppm_reading: 7000, abs_floor: 3.4e-06}
+              180d:  {ppm_reading: 8000, abs_floor: 3.4e-06}
+              1y:    {ppm_reading: 10000, abs_floor: 5e-06}
+          - freq_hz: [2e+06, 1e+07]
+            limits:
+              24h:   {ppm_reading: 8000, abs_floor: 3.4e-06}
+              90d:   {ppm_reading: 9000, abs_floor: 3.4e-06}
+              180d:  {ppm_reading: 10000, abs_floor: 3.4e-06}
+              1y:    {ppm_reading: 12000, abs_floor: 5e-06}
+          - freq_hz: [1e+07, 2e+07]
+            limits:
+              24h:   {ppm_reading: 10000, abs_floor: 3.4e-06}
+              90d:   {ppm_reading: 11000, abs_floor: 3.4e-06}
+              180d:  {ppm_reading: 12000, abs_floor: 3.4e-06}
+              1y:    {ppm_reading: 14000, abs_floor: 5e-06}
+          - freq_hz: [2e+07, 3e+07]
+            limits:
+              24h:   {ppm_reading: 19000, abs_floor: 1.54e-05}
+              90d:   {ppm_reading: 20000, abs_floor: 1.54e-05}
+              180d:  {ppm_reading: 21000, abs_floor: 1.54e-05}
+              1y:    {ppm_reading: 23000, abs_floor: 1.7e-05}
+
+      - fs: 0.0033
+        range_id: WB3_3MV
+        resolution: 1e-08
+        min_out: 0.0003     # 300 uV (-57 dBm) overall minimum
+        source_impedance_ohm: 50.0
+        bands:
+          - freq_hz: [10, 30]
+            limits:
+              24h:   {ppm_reading: 7000, abs_floor: 1e-06}
+              90d:   {ppm_reading: 7500, abs_floor: 1e-06}
+              180d:  {ppm_reading: 8000, abs_floor: 1e-06}
+              1y:    {ppm_reading: 10000, abs_floor: 3e-06}
+          - freq_hz: [30, 500000]
+            limits:
+              24h:   {ppm_reading: 4000, abs_floor: 1e-06}
+              90d:   {ppm_reading: 4500, abs_floor: 1e-06}
+              180d:  {ppm_reading: 5000, abs_floor: 1e-06}
+              1y:    {ppm_reading: 7000, abs_floor: 3e-06}
+          - freq_hz: [500000, 2e+06]
+            limits:
+              24h:   {ppm_reading: 5000, abs_floor: 4e-06}
+              90d:   {ppm_reading: 5500, abs_floor: 4e-06}
+              180d:  {ppm_reading: 6000, abs_floor: 4e-06}
+              1y:    {ppm_reading: 8000, abs_floor: 6e-06}
+          - freq_hz: [2e+06, 1e+07]
+            limits:
+              24h:   {ppm_reading: 7000, abs_floor: 4e-06}
+              90d:   {ppm_reading: 7500, abs_floor: 4e-06}
+              180d:  {ppm_reading: 8000, abs_floor: 4e-06}
+              1y:    {ppm_reading: 10000, abs_floor: 6e-06}
+          - freq_hz: [1e+07, 2e+07]
+            limits:
+              24h:   {ppm_reading: 9000, abs_floor: 4e-06}
+              90d:   {ppm_reading: 9500, abs_floor: 4e-06}
+              180d:  {ppm_reading: 10000, abs_floor: 4e-06}
+              1y:    {ppm_reading: 12000, abs_floor: 6e-06}
+          - freq_hz: [2e+07, 3e+07]
+            limits:
+              24h:   {ppm_reading: 19000, abs_floor: 4e-06}
+              90d:   {ppm_reading: 19500, abs_floor: 4e-06}
+              180d:  {ppm_reading: 20000, abs_floor: 4e-06}
+              1y:    {ppm_reading: 22000, abs_floor: 6e-06}
+
+      - fs: 0.011
+        range_id: WB11MV
+        resolution: 1e-07
+        min_out: 0.0003     # 300 uV (-57 dBm) overall minimum
+        source_impedance_ohm: 50.0
+        bands:
+          - freq_hz: [10, 30]
+            limits:
+              24h:   {ppm_reading: 5000, abs_floor: 4e-06}
+              90d:   {ppm_reading: 6500, abs_floor: 4e-06}
+              180d:  {ppm_reading: 8000, abs_floor: 4e-06}
+              1y:    {ppm_reading: 10000, abs_floor: 8e-06}
+          - freq_hz: [30, 500000]
+            limits:
+              24h:   {ppm_reading: 2000, abs_floor: 4e-06}
+              90d:   {ppm_reading: 3500, abs_floor: 4e-06}
+              180d:  {ppm_reading: 5000, abs_floor: 4e-06}
+              1y:    {ppm_reading: 7000, abs_floor: 8e-06}
+          - freq_hz: [500000, 2e+06]
+            limits:
+              24h:   {ppm_reading: 3000, abs_floor: 7e-06}
+              90d:   {ppm_reading: 4500, abs_floor: 7e-06}
+              180d:  {ppm_reading: 6000, abs_floor: 7e-06}
+              1y:    {ppm_reading: 8000, abs_floor: 1.1e-05}
+          - freq_hz: [2e+06, 1e+07]
+            limits:
+              24h:   {ppm_reading: 4000, abs_floor: 7e-06}
+              90d:   {ppm_reading: 5500, abs_floor: 7e-06}
+              180d:  {ppm_reading: 7000, abs_floor: 7e-06}
+              1y:    {ppm_reading: 9000, abs_floor: 1.1e-05}
+          - freq_hz: [1e+07, 2e+07]
+            limits:
+              24h:   {ppm_reading: 6000, abs_floor: 7e-06}
+              90d:   {ppm_reading: 7500, abs_floor: 7e-06}
+              180d:  {ppm_reading: 9000, abs_floor: 7e-06}
+              1y:    {ppm_reading: 11000, abs_floor: 1.1e-05}
+          - freq_hz: [2e+07, 3e+07]
+            limits:
+              24h:   {ppm_reading: 12000, abs_floor: 7e-06}
+              90d:   {ppm_reading: 13500, abs_floor: 7e-06}
+              180d:  {ppm_reading: 15000, abs_floor: 7e-06}
+              1y:    {ppm_reading: 17000, abs_floor: 1.1e-05}
+
+      - fs: 0.033
+        range_id: WB33MV
+        resolution: 1e-07
+        min_out: 0.0003     # 300 uV (-57 dBm) overall minimum
+        source_impedance_ohm: 50.0
+        bands:
+          - freq_hz: [10, 30]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 5000, abs_floor: 1e-05}
+              90d:   {ppm_reading: 6000, abs_floor: 1e-05}
+              180d:  {ppm_reading: 7500, abs_floor: 1e-05}
+              1y:    {ppm_reading: 9000, abs_floor: 1.6e-05}
+          - freq_hz: [30, 500000]
+            limits:
+              24h:   {ppm_reading: 2000, abs_floor: 1e-05}
+              90d:   {ppm_reading: 3000, abs_floor: 1e-05}
+              180d:  {ppm_reading: 4500, abs_floor: 1e-05}
+              1y:    {ppm_reading: 6000, abs_floor: 1.6e-05}
+          - freq_hz: [500000, 2e+06]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 3000, abs_floor: 1.3e-05}
+              90d:   {ppm_reading: 4000, abs_floor: 1.3e-05}
+              180d:  {ppm_reading: 5500, abs_floor: 1.3e-05}
+              1y:    {ppm_reading: 7000, abs_floor: 1.9e-05}
+          - freq_hz: [2e+06, 1e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 4000, abs_floor: 1.3e-05}
+              90d:   {ppm_reading: 5000, abs_floor: 1.3e-05}
+              180d:  {ppm_reading: 6500, abs_floor: 1.3e-05}
+              1y:    {ppm_reading: 8000, abs_floor: 1.9e-05}
+          - freq_hz: [1e+07, 2e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 6000, abs_floor: 1.3e-05}
+              90d:   {ppm_reading: 7000, abs_floor: 1.3e-05}
+              180d:  {ppm_reading: 8500, abs_floor: 1.3e-05}
+              1y:    {ppm_reading: 10000, abs_floor: 1.9e-05}
+          - freq_hz: [2e+07, 3e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 12000, abs_floor: 1.3e-05}
+              90d:   {ppm_reading: 13000, abs_floor: 1.3e-05}
+              180d:  {ppm_reading: 14500, abs_floor: 1.3e-05}
+              1y:    {ppm_reading: 16000, abs_floor: 1.9e-05}
+
+      - fs: 0.11
+        range_id: WB110MV
+        resolution: 1e-06
+        min_out: 0.0003     # 300 uV (-57 dBm) overall minimum
+        source_impedance_ohm: 50.0
+        bands:
+          - freq_hz: [10, 30]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 5000, abs_floor: 4e-05}
+              90d:   {ppm_reading: 6000, abs_floor: 4e-05}
+              180d:  {ppm_reading: 7500, abs_floor: 4e-05}
+              1y:    {ppm_reading: 9000, abs_floor: 4e-05}
+          - freq_hz: [30, 500000]
+            limits:
+              24h:   {ppm_reading: 2000, abs_floor: 4e-05}
+              90d:   {ppm_reading: 3000, abs_floor: 4e-05}
+              180d:  {ppm_reading: 4500, abs_floor: 4e-05}
+              1y:    {ppm_reading: 6000, abs_floor: 4e-05}
+          - freq_hz: [500000, 2e+06]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 3000, abs_floor: 4.3e-05}
+              90d:   {ppm_reading: 4000, abs_floor: 4.3e-05}
+              180d:  {ppm_reading: 5500, abs_floor: 4.3e-05}
+              1y:    {ppm_reading: 7000, abs_floor: 4.3e-05}
+          - freq_hz: [2e+06, 1e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 4000, abs_floor: 4.3e-05}
+              90d:   {ppm_reading: 5000, abs_floor: 4.3e-05}
+              180d:  {ppm_reading: 6500, abs_floor: 4.3e-05}
+              1y:    {ppm_reading: 8000, abs_floor: 4.3e-05}
+          - freq_hz: [1e+07, 2e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 6000, abs_floor: 4.3e-05}
+              90d:   {ppm_reading: 7000, abs_floor: 4.3e-05}
+              180d:  {ppm_reading: 8500, abs_floor: 4.3e-05}
+              1y:    {ppm_reading: 10000, abs_floor: 4.3e-05}
+          - freq_hz: [2e+07, 3e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 12000, abs_floor: 4.3e-05}
+              90d:   {ppm_reading: 13000, abs_floor: 4.3e-05}
+              180d:  {ppm_reading: 14500, abs_floor: 4.3e-05}
+              1y:    {ppm_reading: 16000, abs_floor: 4.3e-05}
+
+      - fs: 0.33
+        range_id: WB330MV
+        resolution: 1e-06
+        min_out: 0.0003     # 300 uV (-57 dBm) overall minimum
+        source_impedance_ohm: 50.0
+        bands:
+          - freq_hz: [10, 30]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 5000, abs_floor: 0.0001}
+              90d:   {ppm_reading: 5500, abs_floor: 0.0001}
+              180d:  {ppm_reading: 6500, abs_floor: 0.0001}
+              1y:    {ppm_reading: 8000, abs_floor: 0.0001}
+          - freq_hz: [30, 500000]
+            limits:
+              24h:   {ppm_reading: 2000, abs_floor: 0.0001}
+              90d:   {ppm_reading: 2500, abs_floor: 0.0001}
+              180d:  {ppm_reading: 3500, abs_floor: 0.0001}
+              1y:    {ppm_reading: 5000, abs_floor: 0.0001}
+          - freq_hz: [500000, 2e+06]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 3000, abs_floor: 0.000103}
+              90d:   {ppm_reading: 3500, abs_floor: 0.000103}
+              180d:  {ppm_reading: 4500, abs_floor: 0.000103}
+              1y:    {ppm_reading: 6000, abs_floor: 0.000103}
+          - freq_hz: [2e+06, 1e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 4000, abs_floor: 0.000103}
+              90d:   {ppm_reading: 4500, abs_floor: 0.000103}
+              180d:  {ppm_reading: 5500, abs_floor: 0.000103}
+              1y:    {ppm_reading: 7000, abs_floor: 0.000103}
+          - freq_hz: [1e+07, 2e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 6000, abs_floor: 0.000103}
+              90d:   {ppm_reading: 6500, abs_floor: 0.000103}
+              180d:  {ppm_reading: 7500, abs_floor: 0.000103}
+              1y:    {ppm_reading: 9000, abs_floor: 0.000103}
+          - freq_hz: [2e+07, 3e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 12000, abs_floor: 0.000103}
+              90d:   {ppm_reading: 12500, abs_floor: 0.000103}
+              180d:  {ppm_reading: 13500, abs_floor: 0.000103}
+              1y:    {ppm_reading: 15000, abs_floor: 0.000103}
+
+      - fs: 1.1
+        range_id: WB1_1V
+        resolution: 1e-05
+        min_out: 0.0003     # 300 uV (-57 dBm) overall minimum
+        source_impedance_ohm: 50.0
+        bands:
+          - freq_hz: [10, 30]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 5000, abs_floor: 0.0004}
+              90d:   {ppm_reading: 5500, abs_floor: 0.0004}
+              180d:  {ppm_reading: 6500, abs_floor: 0.0004}
+              1y:    {ppm_reading: 8000, abs_floor: 0.0004}
+          - freq_hz: [30, 500000]
+            limits:
+              24h:   {ppm_reading: 2000, abs_floor: 0.0004}
+              90d:   {ppm_reading: 2500, abs_floor: 0.0004}
+              180d:  {ppm_reading: 3500, abs_floor: 0.0004}
+              1y:    {ppm_reading: 5000, abs_floor: 0.0004}
+          - freq_hz: [500000, 2e+06]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 3000, abs_floor: 0.000403}
+              90d:   {ppm_reading: 3500, abs_floor: 0.000403}
+              180d:  {ppm_reading: 4500, abs_floor: 0.000403}
+              1y:    {ppm_reading: 6000, abs_floor: 0.000403}
+          - freq_hz: [2e+06, 1e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 4000, abs_floor: 0.000403}
+              90d:   {ppm_reading: 4500, abs_floor: 0.000403}
+              180d:  {ppm_reading: 5500, abs_floor: 0.000403}
+              1y:    {ppm_reading: 7000, abs_floor: 0.000403}
+          - freq_hz: [1e+07, 2e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 6000, abs_floor: 0.000403}
+              90d:   {ppm_reading: 6500, abs_floor: 0.000403}
+              180d:  {ppm_reading: 7500, abs_floor: 0.000403}
+              1y:    {ppm_reading: 9000, abs_floor: 0.000403}
+          - freq_hz: [2e+07, 3e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 12000, abs_floor: 0.000403}
+              90d:   {ppm_reading: 12500, abs_floor: 0.000403}
+              180d:  {ppm_reading: 13500, abs_floor: 0.000403}
+              1y:    {ppm_reading: 15000, abs_floor: 0.000403}
+
+      - fs: 3.5
+        range_id: WB3_5V
+        resolution: 1e-05
+        min_out: 0.0003     # 300 uV (-57 dBm) overall minimum
+        source_impedance_ohm: 50.0
+        bands:
+          - freq_hz: [10, 30]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 4500, abs_floor: 0.0005}
+              90d:   {ppm_reading: 5000, abs_floor: 0.0005}
+              180d:  {ppm_reading: 6000, abs_floor: 0.0005}
+              1y:    {ppm_reading: 7000, abs_floor: 0.0005}
+          - freq_hz: [30, 500000]
+            limits:
+              24h:   {ppm_reading: 1500, abs_floor: 0.0005}
+              90d:   {ppm_reading: 2000, abs_floor: 0.0005}
+              180d:  {ppm_reading: 3000, abs_floor: 0.0005}
+              1y:    {ppm_reading: 4000, abs_floor: 0.0005}
+          - freq_hz: [500000, 2e+06]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 2500, abs_floor: 0.000503}
+              90d:   {ppm_reading: 3000, abs_floor: 0.000503}
+              180d:  {ppm_reading: 4000, abs_floor: 0.000503}
+              1y:    {ppm_reading: 5000, abs_floor: 0.000503}
+          - freq_hz: [2e+06, 1e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 3500, abs_floor: 0.000503}
+              90d:   {ppm_reading: 4000, abs_floor: 0.000503}
+              180d:  {ppm_reading: 5000, abs_floor: 0.000503}
+              1y:    {ppm_reading: 6000, abs_floor: 0.000503}
+          - freq_hz: [1e+07, 2e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 5500, abs_floor: 0.000503}
+              90d:   {ppm_reading: 6000, abs_floor: 0.000503}
+              180d:  {ppm_reading: 7000, abs_floor: 0.000503}
+              1y:    {ppm_reading: 8000, abs_floor: 0.000503}
+          - freq_hz: [2e+07, 3e+07]
+            # [MS5] lines 66-67 (PDF p.2) / [MS9] line 1467 (PDF p.26),
+            #   flatness footnote [1].  Strict "< 50 %".
+            below_frac_adder: {below_frac: 0.5, pct_reading: 0.1}
+            limits:
+              24h:   {ppm_reading: 11500, abs_floor: 0.000503}
+              90d:   {ppm_reading: 12000, abs_floor: 0.000503}
+              180d:  {ppm_reading: 13000, abs_floor: 0.000503}
+              1y:    {ppm_reading: 14000, abs_floor: 0.000503}
+

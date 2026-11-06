@@ -1,0 +1,921 @@
+# Fluke 5700A/5720A Series II — complete fault-code table
+
+Transcribed from the **5700A/5720A Series II Calibrator Service
+Manual (2007), chapter 4 "Fault Codes" (pages 4-15 … 4-37)**.
+
+692 codes. Three print artifacts are corrected **in this file**:
+823 `<<= 0 Hz` → `<= 0 Hz`, 831 `2-ire` → `2-Wire`,
+2222 `Invlaid` → `Invalid`.
+
+**Wording caveat.** Those three codes are the only places this table
+and the Remote Programming Guide §12.1 transcription disagree — and
+the guide keeps the artifacts *verbatim*, because the printed tables
+look like dumps of the firmware's own strings, so the "typo" may be
+exactly what `EXPLAIN?` answers. The driver's `FAULT_CODES` therefore
+keeps the guide wording for every code both sources carry and takes
+this table's wording only for the codes the guide does not list. The
+console's `explain` shows the offline text and the live `EXPLAIN?`
+side by side and flags disagreements, so a wording drift against real
+firmware is visible, never silent.
+
+## 100-Level Faults: Air Flow Monitoring Subsystem
+
+| Code | Message |
+|------|---------|
+| 100 | Low Air Flow |
+
+## 200-Level Faults: 5725 Boost System
+
+| Code | Message |
+|------|---------|
+| 200 | 5725 No Error |
+| 201 | 5725 Self-Test ROM Failure |
+| 202 | 5725 Self-Test RAM Failure |
+| 203 | 5725 Self-Test EEPROM Failure |
+| 204 | 5725 Self-Test Data Bus Failure |
+| 205 | 5725 Self-Test CLAMPS Circuit Failure |
+| 206 | 5725 Self-Test HVCLR Circuit Failure |
+| 207 | 5725 Self-Test DAC Failure |
+| 208 | 5725 Self-Test Watchdog Timer Failure |
+| 209 | 5725 Current Heatsink Too Hot |
+| 210 | Output Tripped To Standby |
+| 211 | 5725 Current Compliance Voltage Too High |
+| 212 | 5725 Current Compliance Voltage Too High |
+| 213 | 5725 +400V Supply Did Not Shut Off |
+| 214 | 5725 -400V Supply Did Not Shut Off |
+| 215 | 5725 Voltage Heatsink Too Hot |
+| 216 | 5725 Voltage Heatsink Too Hot |
+| 217 | 5725 +400V Supply Too Small |
+| 218 | 5725 +400V Supply Too Large |
+| 219 | 5725 -400V Supply Too Large |
+| 220 | 5725 -400V Supply Too Small |
+| 221 | 5725 +400V Supply Current Too High |
+| 222 | Output Tripped To Standby |
+| 223 | 5725 -400V Supply Current Too High |
+| 224 | Output Tripped To Standby |
+| 225 | 5725 Fan Not Working |
+| 226 | 5725 CLAMPS Fault |
+| 227 | Output Tripped To Standby |
+| 228 | 5725 Software TRAP |
+| 229 | 5725 Cable Was Off |
+| 230 | 5725 RESET (power-up or watchdog timer) |
+| 231 | 5725 Guard-Crossing Timeout |
+| 232 | 5725 Illegal/Unexecutable Command |
+| 233 | 5725 Non-Maskable Interrupt Occurred |
+| 234 | 5725 HVCLEAR Circuit Activated |
+| 235 | Output Tripped To Standby |
+
+## 400-Level Faults: Calibration Constant Subsystem
+
+| Code | Message |
+|------|---------|
+| 400 | Bad Cal Constant ID |
+
+## 500-Level Faults: Configuration Finder Subsystem
+
+| Code | Message |
+|------|---------|
+| 500 | Bad Mode To CNFmodeRanges |
+| 501 | Configuration Table Overflow |
+| 502 | Bad Amplifier Type Selection |
+| 503 | Bad Flat Constant Type Selection |
+| 504 | Bad Flat Constant Type In Table |
+| 505 | 5725 Guard Crossing Wouldn't Start |
+
+## 600-Level Faults: Dot Matrix Display Driver Subsystem
+
+| Code | Message |
+|------|---------|
+| 600 | Bad Row Selector |
+| 601 | Bad Column Argument |
+| 602 | Bad Character |
+
+## 800-Level Faults: Executive Subsystem
+
+| Code | Message |
+|------|---------|
+| 800 | Wideband Module Needed |
+| 801 | Amplifier Not Selected Or Connected |
+| 802 | Amplifier Must Remain On For This Output |
+| 803 | Over Limits Of Locked Range |
+| 804 | Under Limits Of Locked Range |
+| 806 | Invalid Date |
+| 807 | Invalid Time |
+| 808 | DC dBm Not Allowed |
+| 809 | Ext Ref Value Out Of Range |
+| 810 | Bad Edit Digit Movement |
+| 811 | Not Wideband Units |
+| 812 | Cannot Set Frequency With Ohms |
+| 813 | Bad Units |
+| 814 | Wrong Polarity For Limit |
+| 815 | Outside Entry Limits |
+| 816 | Magnitude Too Large For Calibrator |
+| 817 | Magnitude Too Small For Calibrator |
+| 818 | Frequency Too Large For Calibrator |
+| 819 | Frequency Too Small For Calibrator |
+| 820 | Calibrator Cannot Source That Value |
+| 821 | V Limit Outside Calibrator Ability |
+| 822 | I Limit Outside Calibrator Ability |
+| 823 | Cannot Adjust Frequency To <= 0 Hz |
+| 824 | Offset Not Allowed Now |
+| 825 | Scale Not Allowed Now |
+| 826 | Ohms Reading Set Too High |
+| 827 | Ohms Reading Set Too Low |
+| 828 | Cannot Use External Sense Now |
+| 829 | Cannot Use Phase Shift Now |
+| 830 | Cannot Use Phase Lock Now |
+| 831 | Cannot Use 2-Wire Comp Now |
+| 832 | Could not Do Default Wideband Output |
+| 833 | Bad Selector For Set/Get Item |
+| 834 | Cannot Boost This Output Mode |
+| 835 | Cannot Use Ext Sense On Selected Range |
+| 836 | Cannot Use 2 Wire Comp On Selected Range |
+| 837 | Cannot Lock This Range |
+| 838 | Cannot Set Clock, Rear Switch In NORMAL |
+| 839 | Cannot Fmt EEPROM, Rear Switch In NORMAL |
+| 840 | Illegal Output Post For Current |
+| 841 | No 5725 Available For Selected Output |
+| 842 | Not A Valid Wideband Flatness Point |
+| 843 | Wideband Flatness Cal Is Not Active |
+| 844 | Report String Too Long |
+| 845 | Cannot Store, Rear Switch In NORMAL |
+| 846 | Range Calibration Is Not Active |
+| 847 | Magnitude Too High For Range Cal |
+| 848 | Magnitude Too Low For Range Cal |
+| 849 | Invalid Calibrator Setup Block |
+| 850 | Cannot Format, 5725 Switch In NORMAL |
+| 851 | Cannot Store, 5725 Switch In NORMAL |
+| 852 | Calibration Steps Out Of Order |
+| 853 | Cannot Use External Guard Now |
+| 854 | Cannot Use Ext Guard On Selected Range |
+| 855 | Cannot Set String, Rear Switch in NORMAL |
+| 856 | Present Output Exceeds Selected Limit |
+| 857 | Bad Selector For Reference Calibration |
+| 858 | Cannot Change Range Now |
+| 859 | Hardware Not Installed For This Range |
+| 860 | Cannot Use Amplifier For This Output |
+| 861 | 5725 Cannot Ext Sense At That Frequency |
+
+## 900-Level Faults: Keyboard Driver Subsystem
+
+| Code | Message |
+|------|---------|
+| 900 | Keyboard Output Queue Full |
+
+## 1000-Level Faults: 5725 Communication Receive Subsystem
+
+| Code | Message |
+|------|---------|
+| 1000 | Could not ACK Packet From 5725 |
+| 1001 | Illegal 5725 Receive Task State |
+| 1002 | Bad Receive Packet Number From 5725 |
+| 1003 | Bad Control Byte From 5725 |
+
+## 1100-Level Faults: 5725 Communication Transmit Subsystem
+
+| Code | Message |
+|------|---------|
+| 1100 | Multiple Timeouts Sending To 5725 |
+| 1101 | 5725 Request Reset Loop |
+| 1102 | Unexpected NSA From 5725 |
+| 1103 | Bad Packet Number In ACK From 5725 |
+| 1104 | Bad Control Byte From 5725 Receive Task |
+| 1105 | Illegal 5725 Transmit Task State |
+| 1106 | 5725 Indefinite ACKWAIT Holdoff |
+
+## 1200-Level Faults: 5725 Communication Utility Subsystem
+
+| Code | Message |
+|------|---------|
+| 1200 | Serial Write Failure To 5725 |
+| 1201 | Packet Too Large For 5725 |
+
+## 1300-Level Faults: Output Monitor Subsystem
+
+| Code | Message |
+|------|---------|
+| 1300 | Undefined Signal |
+| 1301 | Output Tripped To Standby |
+| 1302 | Output Tripped To Standby |
+| 1303 | DC Zero Calibration is Needed (Every 30 Days) |
+
+## 1400-Level Faults: Software Timer Subsystem
+
+| Code | Message |
+|------|---------|
+| 1400 | Cannot Install MTtick() |
+| 1401 | Bad Timer Selector |
+
+## 1500-Level Faults: Guard Crossing Receive Subsystem
+
+| Code | Message |
+|------|---------|
+| 1500 | Could not ACK Packet From Inguard |
+| 1501 | Illegal Inguard Receive Task State |
+| 1502 | Bad Receive Packet Number From Inguard |
+| 1503 | Bad Control Byte From Inguard |
+
+## 1600-Level Faults: Guard Crossing Transmit Subsystem
+
+| Code | Message |
+|------|---------|
+| 1600 | Multiple Timeouts Sending To Inguard |
+| 1601 | Inguard Request Reset Loop |
+| 1602 | Unexpected NSA From Inguard |
+| 1603 | Bad Packet Number In ACK From Inguard |
+| 1604 | Bad Control Byte From Inguard Rcv Task |
+| 1605 | Illegal Inguard Transmit Task State |
+| 1606 | Inguard Indefinite ACKWAIT Holdoff |
+
+## 1700-Level Faults: Guard Crossing Utility Subsystem
+
+| Code | Message |
+|------|---------|
+| 1700 | Serial Write Failure To Inguard |
+| 1701 | Packet Too Large For Inguard |
+
+## 1800-Level Faults: Normal Output Operations Subsystem
+
+| Code | Message |
+|------|---------|
+| 1800 | DORMANT To OPERATE |
+| 1801 | Bad Transition Type |
+| 1802 | Bad Boolean Selector |
+| 1803 | NRMrngStby Encountered Error |
+| 1804 | DCV Called For Non-DCV Range |
+| 1805 | ACV Called For Non-ACV Range |
+| 1806 | Bad ACV Frequency Range |
+| 1807 | Hi Res Frequency Too High |
+| 1808 | ACV Amplitude Correction Failure |
+| 1809 | Cannot Phase Lock To Signal |
+| 1810 | Bad Phase Quadrant |
+| 1811 | Current Called for Non-Current Range |
+| 1812 | Ohms Called for Non-Ohms Range |
+| 1813 | Cannot Phase Lock, Output Not AC |
+| 1814 | Cannot Phase Shift, Output Not AC |
+| 1815 | Bad Wide Band Range |
+| 1816 | Freq. Too High Even For Wide Band |
+| 1817 | Illegal Current Output Location |
+| 1818 | Output Current Out Of Tolerance |
+| 1819 | Current Compliance Voltage Exceeded |
+| 1820 | 2-Wire Compensation Current Exceeded |
+| 1821 | NRMbstcur Passed Bad Range |
+| 1822 | 5220 No Longer Connected |
+| 1823 | 5220 Detected Fault And Shut Off |
+| 1824 | 5205 No Longer Connected |
+| 1825 | 5205 Detected Fault And Shut Off |
+| 1826 | 5725 No Longer Connected |
+| 1827 | 14 Bit DAC Scaling Found Zero Output |
+
+## 1900-Level Faults: Non-Volatile Subsystem
+
+| Code | Message |
+|------|---------|
+| 1900 | Could not Write Byte To EEPROM |
+| 1901 | Checksum Error Reading EEPROM |
+| 1902 | EEPROM Is Full |
+| 1903 | Unknown Nonvolatile Constant Selector |
+| 1904 | EEPROM Partition Is Full |
+| 1905 | Could not Write Byte To 5725 EEPROM |
+| 1906 | Checksum Error Reading 5725 EEPROM |
+
+## 2000-Level Faults: Analog Operations Manager Subsystem
+
+| Code | Message |
+|------|---------|
+| 2000 | Bad Command Code |
+| 2001 | Bad Signal |
+| 2002 | Long Term Command In Progress |
+| 2003 | Guard Crossing Protocol Failed To Start |
+| 2004 | Fatal Fault, Output Tripped |
+| 2005 | Tripped While Calibrating or Diagnosing |
+
+## 2100-Level Faults: Output Display Driver Subsystem
+
+| Code | Message |
+|------|---------|
+| 2100 | Bad Display Selector |
+| 2101 | Bad Character |
+| 2102 | Bad Annunciator Selector |
+
+## 2200-Level Faults: Remote Interface Subsystem
+
+| Code | Message |
+|------|---------|
+| 2200 | Unknown Command |
+| 2201 | Invalid Number Of Parameters |
+| 2202 | Invalid Cal Constant Name |
+| 2203 | Invalid Keyword |
+| 2204 | Invalid Range |
+| 2205 | Invalid Parameter Type |
+| 2206 | Invalid Parameter Unit |
+| 2207 | Invalid Parameter Value |
+| 2208 | IEEE488.2 I/O DEADLOCK |
+| 2209 | Spare |
+| 2210 | IEEE488.2 INTERRUPTED Query |
+| 2211 | Not Allowed From GPIB Interface |
+| 2212 | Not Allowed From Serial Interface |
+| 2213 | Remote Only |
+| 2214 | Invalid Syntax |
+| 2215 | IEEE488.2 UNTERMINATED Command |
+| 2216 | Symbol Table Overflow |
+| 2217 | Command Reserved For Service |
+| 2218 | Invalid Binary Number |
+| 2219 | Invalid Binary Block |
+| 2220 | Invalid Character |
+| 2221 | Invalid Decimal Number |
+| 2222 | Invalid Hexadecimal Block |
+| 2223 | Invalid Hexadecimal Number |
+| 2224 | Too Many Parameters |
+| 2225 | Invalid Octal Number |
+| 2226 | Too Many Characters |
+| 2227 | Invalid String |
+| 2228 | Invalid Register Address |
+| 2229 | Invalid Cal Constant Name |
+| 2230 | Remote Serial Port Dead |
+| 2231 | IEEE488.2 Query After Indef Response |
+
+## 2300-Level Faults: Executive Subsystem
+
+| Code | Message |
+|------|---------|
+| 2300 | Unknown Report Requested |
+| 2301 | Unknown Report Device Requested |
+| 2302 | Serial Port Timeout |
+
+## 2400-Level Faults: Real Time Clock Subsystem
+
+| Code | Message |
+|------|---------|
+| 2400 | Cannot Install Interrupt Handler |
+| 2401 | Unknown Interrupt Selector |
+| 2402 | Bad Date & Cannot Be Set |
+
+## 2500-Level and 2600-Level Faults: Self Calibration Subsystem
+
+| Code | Message |
+|------|---------|
+| 2500 | Invalid Cal Procedure Number |
+| 2501 | Could not Ext Cal Gain |
+| 2502 | Could not Ext Cal Ref |
+| 2503 | Could not Ext Cal Neg |
+| 2504 | Could not Cal Ratio |
+| 2505 | Could not Cal Pos 11V or 22V DC Zero |
+| 2506 | Could not Cal Neg 11V or 22V DC Zero |
+| 2507 | Could not Cal Pos 11V or 22V DC Gain |
+| 2508 | Could not Cal 6.5V or 13V Buf Ref |
+| 2509 | Could not Cal 2.2V Zero |
+| 2510 | Could not Cal 220 mV Gain S1 |
+| 2511 | Could not Cal 220 mV Gain S2 |
+| 2512 | Could not Cal 220 mV Gain S3 |
+| 2513 | Could not Cal 220 mV Gain S4 |
+| 2514 | Could not Cal 220V DC Offset |
+| 2515 | Could not Cal 220V DC Rnet |
+| 2516 | Could not Cal 220V DC Gain |
+| 2517 | Could not Cal ACV Gain |
+| 2518 | Flatness Cal: Main Sensor Fail? |
+| 2519 | Flatness Cal: AC Cal Sensor Fail? |
+| 2520 | Could not Cal Fine Tune (14 bit) DAC |
+| 2521 | Could not Cal Fine Tune 15th bit Down |
+| 2522 | Could not Cal Fine Tune 15th bit Up |
+| 2523 | Could not Cal 2.2 mV/22 mV step 1 |
+| 2524 | Could not Cal 2.2 mV/22 mV step 2 |
+| 2525 | Could not Cal 220V AC Offset |
+| 2526 | Could not Cal 220V AC Gain |
+| 2527 | Could not Cal 220 mV Offset |
+| 2528 | Could not Cal 1100V AC/DC Offset |
+| 2529 | Could not Cal 1100V AC/DC Gain |
+| 2530 | Could not Cal 220 uA DC Zero |
+| 2531 | Could not Cal 2.2 mA DC Zero |
+| 2532 | Could not Cal 22 mA DC Zero |
+| 2533 | Could not Cal 220 mA DC Zero |
+| 2534 | Could not Cal 2.2A DC Zero |
+| 2535 | Could not Cal 220 uA DCI (Meas 1) |
+| 2536 | Could not Cal 220 uA DCI (Meas 2) |
+| 2537 | Could not Cal 2.2 mA DCI (Meas 1) |
+| 2538 | Could not Cal 2.2 mA DCI (Meas 2) |
+| 2539 | Could not Cal 22 mA DCI (Meas 1) |
+| 2540 | Could not Cal 22 mA DCI (Meas 2) |
+| 2541 | Could not Cal 220 mA DCI (Meas 1) |
+| 2542 | Could not Cal 220 mA DCI (Meas 2) |
+| 2543 | Could not Cal 2.2A DCI (Meas 1) |
+| 2544 | Could not Cal 2.2A DCI (Meas 2) |
+| 2545 | Could not Ext Cal 10K Ohm Std (Meas 1) |
+| 2546 | Could not Ext Cal 10K Ohm Std (Meas 2) |
+| 2547 | Could not Ext Cal 10K Ohm Std (Meas 3) |
+| 2548 | Could not Cal 10K Ohm (Meas 1) |
+| 2549 | Could not Cal 10K Ohm (Meas 2) |
+| 2550 | Could not Cal 10K Ohm (Meas 3) |
+| 2551 | Could not Cal 19K Ohm (Meas 1) |
+| 2552 | Could not Cal 19K Ohm (Meas 2) |
+| 2553 | Could not Cal 19K Ohm (Meas 3) |
+| 2554 | Could not Cal 100K Ohm (Meas 1) |
+| 2555 | Could not Cal 100K Ohm (Meas 2) |
+| 2556 | Could not Cal 190K Ohm (Meas 1) |
+| 2557 | Could not Cal 190K Ohm (Meas 2) |
+| 2558 | Could not Cal 1M Ohm (Meas 1) |
+| 2559 | Could not Cal 1M Ohm (Meas 2) |
+| 2560 | Could not Cal 1.9M Ohm (Meas 1) |
+| 2561 | Could not Cal 1.9M Ohm (Meas 2) |
+| 2562 | Could not Cal 10M Ohm (Meas 1) |
+| 2563 | Could not Cal 10M Ohm (Meas 2) |
+| 2564 | Could not Cal 19M Ohm (Meas 1) |
+| 2565 | Could not Cal 19M Ohm (Meas 2) |
+| 2566 | Could not Cal 100M Ohm (Meas 1) |
+| 2567 | Could not Cal 1K Ohm (Meas 1) |
+| 2568 | Could not Cal 1K Ohm (Meas 2) |
+| 2569 | Could not Cal 1.9K Ohm (Meas 1) |
+| 2570 | Could not Cal 1.9K Ohm (Meas 2) |
+| 2571 | Could not Cal 100 Ohm (Meas 1) |
+| 2572 | Could not Cal 100 Ohm (Meas 2) |
+| 2573 | Could not Cal 190 Ohm (Meas 1) |
+| 2574 | Could not Cal 190 Ohm (Meas 2) |
+| 2575 | Could not Cal Ohms Divider (Meas 1) |
+| 2576 | Could not Cal Ohms Divider (Meas 2) |
+| 2577 | Could not Cal 10 Ohm (Meas 1) |
+| 2578 | Could not Cal 10 Ohm (Meas 2) |
+| 2579 | Could not Cal 19 Ohm (Meas 1) |
+| 2580 | Could not Cal 19 Ohm (Meas 2) |
+| 2581 | Could not Ext Cal 1 Ohm (0.26V CM Meas) |
+| 2582 | Could not Ext Cal 1 Ohm (Ext Meas) |
+| 2583 | Could not Ext Cal 1 Ohm (0.13V CM Meas) |
+| 2584 | Could not Ext Cal 1 Ohm (Int Meas) |
+| 2585 | Could not Ext Cal 1.9 Ohm (0.18V CM Meas) |
+| 2586 | Could not Ext Cal 1.9 Ohm (0.12V CM Meas) |
+| 2587 | Could not Ext Cal 1.9 Ohm (Int Meas) |
+| 2588 | Could not Cal Wideband Gain |
+| 2589 | Bad Cal Step Selector |
+| 2590 | A/D Appears To Have Failed |
+| 2591 | User Range Gain Adjustment Is 0 |
+| 2592 | Stored User Range Gain Adjust Is 0 |
+| 2593 | 220 uA AC Flatness Calibration Failed |
+| 2594 | 2.2 mA AC Flatness Calibration Failed |
+| 2595 | 22 mA AC Flatness Calibration Failed |
+| 2596 | 220 mA AC Flatness Calibration Failed |
+| 2597 | Bad Range Number For IAC Flatness Cal |
+| 2598 | No Data For DCI Calibration |
+| 2599 | 2.2V AC Flat Early Fail |
+| 2600 | 2.2V AC Flat Bad AC Cal Sensor? |
+| 2601 | 2.2V AC Flat Diverge |
+| 2602 | 22V AC Flat Early Fail |
+| 2603 | 22V AC Flat Bad AC Cal Sensor? |
+| 2604 | 22V AC Flat Diverge |
+| 2605 | 220V AC Flat Early Fail |
+| 2606 | 220V AC Flat Bad AC Cal Sensor? |
+| 2607 | 220V AC Flat Diverge |
+| 2608 | 1100V AC Flat Early Fail |
+| 2609 | 1100V AC Flat Bad AC Cal Sensor? |
+| 2610 | 1100V AC Flat Diverge |
+| 2611 | 220 uA IAC Flat Early Fail |
+| 2612 | 220 uA IAC Flat Bad AC Cal Sensor? |
+| 2613 | 220 uA IAC Flat Diverge |
+| 2614 | 2.2 mA IAC Flat Early Fail |
+| 2615 | 2.2 mA IAC Flat Bad AC Cal Sensor? |
+| 2616 | 2.2 mA IAC Flat Diverge |
+| 2617 | 22 mA IAC Flat Early Fail |
+| 2618 | 22 mA IAC Flat Bad AC Cal Sensor? |
+| 2619 | 22 mA IAC Flat Diverge |
+| 2620 | 220 mA IAC Flat Early Fail |
+| 2621 | 220 mA IAC Flat Bad AC Cal Sensor? |
+| 2622 | 220 mA IAC Flat Diverge |
+| 2623 | 2.2A IAC Flat Early Fail |
+| 2624 | 2.2A IAC Flat Bad AC Cal Sensor? |
+| 2625 | 2.2A IAC Flat Diverge |
+| 2626 | Illegal Ohms Null Function State |
+| 2627 | Unknown Source Divider Identifier |
+| 2628 | No Data For Ohms Calibration |
+| 2629 | Illegal Ohms Calibration Config |
+| 2630 | Illegal Number Of Ohms Cal Points |
+| 2631 | 5725 Shunt 0A Meas Fail |
+| 2632 | 5725 Shunt 1.3A Meas Fail |
+| 2633 | 5725 Current Amplifier Zero Meas Fail |
+| 2634 | 5725 Current Amplifier Gain Meas Fail |
+| 2635 | Wideband Thermal Sensor Cal Diverge |
+| 2636 | Wideband Sensor Amp Offset Too Big |
+| 2637 | Wideband Ext Cal Point Bad Const ID |
+| 2638 | 5725 ACV Sense Amp Offset Diverge |
+| 2639 | 5725 ACV Sense Amp Gain Diverge |
+| 2640 | 5725 ACV Flatness Ref Freq Failure |
+| 2641 | 5725 ACV Flatness Cal Freq Failure |
+| 2642 | External V Reference Value Out Of Range |
+| 2643 | 5725 Diagnostic DAC Cal Didn't Converge |
+| 2644 | Spare |
+| 2645 | Spare |
+| 2646 | DAC Appears To Not Meet Linearity Spec |
+| 2647 | ACV Buffer Offset Too Large |
+| 2648 | 5725 ACV Flat Test Cap Too Large |
+| 2649 | 5725 ACV Flat Test Cap Too Large |
+| 2650 | Could not Cal 100M Ohm (Meas 2) |
+
+## 2700-Level Faults: Self Diagnostics Subsystem (Current)
+
+| Code | Message |
+|------|---------|
+| 2700 | A7: 8255 Control Word |
+| 2701 | A7: 8255 Port A Fault |
+| 2702 | A7: 8255 Port B Fault |
+| 2703 | A7: 8255 Port C Fault |
+| 2705 | A7: Oven Regulation Fault |
+| 2706 | A7: Current Compliance Fault |
+| 2707 | A7: Hardware Initialization Fault |
+| 2709 | A7: Current Magnitude Fault |
+| 2710 | A7: Dummy Load Current Fault |
+| 2711 | Assembly A7 Is Not Responding |
+| 2712 | A7: Hi-Res Clock Fault |
+| 2713 | A7: Hi-Res Loop Fault In 100HZ Range |
+| 2714 | A7: Hi-Res Loop Fault In 1KHZ Range |
+| 2715 | A7: Hi-Res Loop Fault In 10KHZ Range |
+| 2716 | A7: Hi-Res Loop Fault In 100KHZ Range |
+| 2717 | A7: Hi-Res Loop Fault In 1MHZ Range |
+| 2718 | Fault In Setting Up AC For Diagnostics |
+| 2719 | A7: 8255 Was Reset |
+
+## 2800-Level Faults: Self Diagnostics Subsystem (DAC)
+
+| Code | Message |
+|------|---------|
+| 2800 | A11: 8255 Control Word |
+| 2801 | A11: 8255 Port A Wires |
+| 2802 | A11: 8255 Port B Data Bus |
+| 2803 | A11: 82C54 Status Words |
+| 2804 | A11: DAC Heaters Not Regulated |
+| 2805 | 5700 Not Warmed Up |
+| 2806 | A11: ADC Amp Output Noise |
+| 2807 | A11: ADC Amp Output Offset |
+| 2808 | A11: ADC Amp Gain Error |
+| 2809 | A11: DAC Monitoring Fault |
+| 2810 | A11: +11V DC Range Fault |
+| 2811 | A11: -11V DC Range Fault |
+| 2812 | A11: +22V DC Range Fault |
+| 2813 | A11: -22V DC Range Fault |
+| 2814 | A11: 6.5V Buffered Reference Fault |
+| 2815 | A11: 6.5V Reference Fault |
+| 2816 | A11: 13V Buffered Reference Fault |
+| 2817 | A11: 13V Reference Fault |
+| 2818 | Assembly A11 Missing |
+| 2819 | A11: 8255 Was Reset |
+| 2820 | A11: Fine Adjust Channel Fault |
+| 2821 | A8/A11: +11/22V DC Zero Estimate Fault |
+| 2822 | A8/A11: -11/22V DC Zero Estimate Fault |
+| 2823 | A11: Could not Estimate +11V Or 22V Gain |
+| 2824 | A11: Could not Estimate 6.5V Or 13V Ref |
+| 2825 | A11: Could not Estimate 6.5V Or 13V Buf Ref |
+| 2826 | A11: A/D Overload Fault |
+
+## 3100-Level Faults: Self Diagnostics Subsystem (High Voltage)
+
+| Code | Message |
+|------|---------|
+| 3100 | A14: 8255 Control Word |
+| 3101 | A14: 8255 Port A Fault |
+| 3102 | A14: 8255 Port B Fault |
+| 3103 | A14: 8255 Port C Fault |
+| 3104 | A15: HV Oven Regulation Fault |
+| 3105 | A15: HV I Oven Regulation Fault |
+| 3106 | A15: DC HV Amp Noise Fault |
+| 3107 | A15: DC HV Amp Offset Fault |
+| 3108 | A15: DC HV Amp Gain Fault |
+| 3109 | A15: HV +DC Preamplifier Fault |
+| 3110 | A15: HV +DC Series Pass & Current Fault |
+| 3111 | A15: HV +DC High Voltage Output Fault |
+| 3112 | A15: HV +DC Ref/Error Amplitude Fault |
+| 3113 | A15: HV -DC Preamplifier Fault |
+| 3114 | A15: HV -DC Series Pass & Current Fault |
+| 3115 | A15: HV -DC High Voltage output Fault |
+| 3116 | A15: HV -DC Reference/Error Amp Fault |
+| 3117 | A14/A15: HV +DC Current Error Amp Fault |
+| 3118 | A14/A15: HV -DC Current Error Amp Fault |
+| 3119 | A14/A15: HV +DC Current Abs. Value |
+| 3120 | A14/A15: HV -DC Current Abs. Value |
+| 3122 | A14/A15: HV AC 1KHZ, Preamp Fault (lo) |
+| 3123 | A14/A15: HV AC 1KHZ, Preamp Fault (mid) |
+| 3124 | A14/A15: HV AC 1KHZ, Preamp Fault (hi) |
+| 3125 | A14/A15: HV AC 100HZ, Preamp Fault (lo) |
+| 3126 | A14/A15: HV AC 100HZ, Preamp Fault |
+| 3127 | A14/A15: HV AC 100HZ, Preamp Fault (hi) |
+| 3128 | A14/A15: HV AC 1KHZ, Output Fault (lo) |
+| 3129 | A14/A15: HV AC 1KHZ, Output Fault (mid) |
+| 3130 | A14/A15: HV AC 1KHZ, Output Fault (hi) |
+| 3131 | A14/A15: HV AC 100HZ, Output Fault (lo) |
+| 3132 | A14/A15: HV AC 100HZ, Output Fault (mid) |
+| 3133 | A14/A15: HV AC 100HZ, Output Fault (hi) |
+| 3135 | Assembly A14 Not Responding |
+| 3136 | A14: 8255 Was Reset |
+| 3137 | A14/A15/A16: 2.2A AC Range Mag. Fault |
+| 3138 | A14/A15/A16: 2.2A AC Range Compliance |
+| 3139 | A14/A15/A16: 2.2A AC Range Amplitude |
+| 3140 | A14/A15/A16: 2.2A AC Range Abs. Value |
+| 3141 | A14/A15/A16: 2.2A DC Range Dummy Load |
+| 3142 | A14/A15/A16: 2.2A DC Range Compliance |
+| 3143 | A14/A15/A16: 2.2A DC Range Magnitude |
+
+## 3200-Level Faults: Self Diagnostics Subsystem (misc)
+
+| Code | Message |
+|------|---------|
+| 3200 | Assemblies Missing |
+| 3201 | Unknown Diagnostic Test |
+| 3202 | 5725 ACV Sense Amp Fault |
+| 3203 | 5725 ACV Standby 5725 Fault |
+| 3204 | 5725 ACV Operate 5725 Fault |
+| 3205 | 5725 ACV Cal Sensor Test Died |
+| 3206 | 5725 ACV Cal Sensor Fault |
+| 3207 | 5725 ACV VLF (100 Hz) Won't Converge |
+| 3208 | 5725 ACV LF (1 kHz) Won't Converge |
+| 3209 | 5725 ACV MF (10 kHz) Won't Converge |
+| 3210 | 5725 ACV HF (100 kHz) Won't Converge |
+| 3211 | 5725 Current Path To Shunt Open |
+| 3212 | 5725 Shunt Sense Open |
+| 3213 | 5725 Shunt Measurement Out Of Tolerance |
+| 3214 | 5725 Current Amplifier Offset Too Large |
+| 3215 | 5725 Current Drive Path Open |
+| 3216 | 5725 Current Error Amplifier Failure |
+| 3217 | 5725 Amplifer Not Connected |
+
+## 3300-Level Faults: Self Diagnostics Subsystem (Ohms)
+
+| Code | Message |
+|------|---------|
+| 3300 | A9: 8255 Control Word |
+| 3301 | A9: 8255 Port A Fault |
+| 3302 | A9: 8255 Port B Fault |
+| 3303 | A9: 8255 Port C Fault |
+| 3304 | A9: 10V Source Fault |
+| 3305 | A9: 5V Source Fault |
+| 3306 | A9: 2V Source Fault |
+| 3308 | A9: Diff Amp Offset Fault |
+| 3309 | A9: Diff Amp Gain Fault |
+| 3310 | A9: Diff Amp Noise Fault |
+| 3311 | A9/A10: Ohms 10:1 Divider Fault |
+| 3312 | A9/A10: Ohms 1:1 Divider Fault |
+| 3313 | A9/A10: 10K Ohm Diagnostic Fault |
+| 3314 | A9/A10: 19K Ohm Cal Diag Fault |
+| 3315 | A9/A10: 10 Ohm Cal Diag Fault |
+| 3316 | A9/A10: 19 Ohm Cal Diag Fault |
+| 3317 | A9/A10: 100K Ohm Ratio Fault |
+| 3318 | A9/A10: 190K Ohm Ratio Fault |
+| 3319 | A9/A10: 1M Ohm Ratio Fault |
+| 3320 | A9/A10: 1.9M Ohm Ratio Fault |
+| 3321 | A9/A10: 10M Ohm Ratio Fault |
+| 3322 | A9/A10: 19M Ohm Ratio Fault 1 |
+| 3323 | A9/A10: 19M Ohm Ratio Fault 2 |
+| 3324 | A9/A10: 100M Ohm Ratio Fault |
+| 3325 | A9/A10: 10K Ohm Check Fault |
+| 3326 | A9/A10: 19K Ohm Check Fault |
+| 3327 | A9/A10: 1K Ohm Check Fault |
+| 3328 | A9/A10: 1.9K Ohm Check Fault |
+| 3329 | A9/A10: 100 Ohm Check Fault |
+| 3330 | A9/A10: 190 Ohm Check Fault |
+| 3331 | A9/A10: 10 Ohm Check Fault |
+| 3332 | A9/A10: 19 Ohm Check Fault |
+| 3333 | A9/A10: 1 Ohm Check Fault |
+| 3334 | A9/A10: 1.9 Ohm Check Fault |
+| 3335 | A9/A10: Ohms Short Check Fault |
+| 3336 | A9/A10: 2 Wire Compensation Fault |
+| 3337 | A9/A10: Ohms Correction Factor Fault |
+| 3338 | Assembly A9 Not Responding |
+| 3339 | A9: 8255 Was Reset |
+| 3340 | A9/A10: 100 Ohm Cal Diag Fault |
+| 3341 | A9/A10: 190 Ohm Cal Diag Fault |
+
+## 3400-Level Faults: Self Diagnostics Subsystem (Oscillator)
+
+| Code | Message |
+|------|---------|
+| 3400 | A12: 8255 Control Word |
+| 3401 | A12: 8255 Port A |
+| 3402 | A12: 8255 Port B |
+| 3403 | A12: 8255 Port C |
+| 3404 | A13: 8255 Control Word |
+| 3405 | A13: 8255 Port A |
+| 3406 | A13: 8255 Port B |
+| 3407 | A13: 8255 Port C |
+| 3408 | A13: Fixed Ampl. Osc Fault |
+| 3409 | A13: Phase Lock Loop Fault |
+| 3410 | A12/A13: 22V Amp Bias Adj Error |
+| 3411 | A12/A13: 22V Amp Nonfunctional |
+| 3412 | A12 To A13 Interface Fault |
+| 3413 | A12/A13: 14 bit DAC Nonfunctional |
+| 3414 | A12/A13: Nonlinear Control Loop 2Vrng |
+| 3415 | A12/A13: nonlinear Control Loop 20Vrng |
+| 3416 | A12/A13: DAC 15th Bit Fault |
+| 3417 | A12: DC Sensor Buffer Fault |
+| 3418 | A12: Sensor Loop/Sq. Root Amp Fault |
+| 3419 | A12: AC Sensor Buff (2V Range) |
+| 3420 | A12: AC Sensor Buff (20V Range) |
+| 3421 | A12: AC Cal Sensor (2V Range) |
+| 3422 | A12: AC Cal Sensor (20V Range) |
+| 3423 | Assembly A12 Missing |
+| 3424 | Assembly A13 Missing |
+| 3425 | Assembly A12 Or A13 Not Responding |
+| 3426 | A12: 8255 Was Reset |
+| 3427 | A13: 8255 Was Reset |
+
+## 3500-Level Faults: Self Diagnostics Subsystem (Power Amp)
+
+| Code | Message |
+|------|---------|
+| 3500 | A16: 8255 Control Word |
+| 3501 | A16: 8255 Port A |
+| 3502 | A16: 8255 Port B |
+| 3503 | A16: 8255 Port C |
+| 3507 | A16: PA Supplies Are Off |
+| 3508 | A16/A14: 220V AC Range Output Fault |
+| 3509 | A16: Amplifier Loop Not Regulated |
+| 3510 | A16: 220V Amp Fault |
+| 3511 | A16: Incorrect PA Input |
+| 3520 | A16: PA Oven Regulation Fault |
+| 3521 | Assembly A16 Is Not Responding |
+| 3524 | A16: Power Amp Is Too Hot |
+| 3525 | 220V DC Initialization Fault |
+| 3526 | 220V AC Initialization Fault |
+| 3527 | A16: Power Amp DC Cal Network Zero Fault |
+| 3528 | A16: Power Amp DC Cal Network Gain Fault |
+| 3529 | A16: Pwr Amp 220V Range Attenuator Fault |
+| 3530 | A16: 8255 Was Reset |
+
+## 3600-Level Faults: Self Diagnostics Subsystem (Power Supplies)
+
+| Code | Message |
+|------|---------|
+| 3600 | +17S Supply Fault |
+| 3601 | -17S Supply Fault |
+| 3602 | +15S Supply Fault |
+| 3603 | -15S Supply Fault |
+| 3604 | +42S Supply Fault |
+| 3605 | -42S Supply Fault |
+| 3606 | LH COM Ground Fault |
+| 3607 | -5LH Supply Fault |
+| 3608 | 5RLH Supply Fault |
+| 3609 | 8RLH Supply Fault |
+| 3610 | +PASupply Fault |
+| 3611 | -PASupply Fault |
+| 3612 | +15 OSC Supply Fault |
+| 3613 | -15 OSC Supply Fault |
+| 3614 | OSC COM Ground Fault |
+| 3615 | S COM Ground Fault |
+
+## 3700-Level Faults: Self Diagnostics Subsystem (Rear I/O)
+
+| Code | Message |
+|------|---------|
+| 3700 | A21: 8255 Control Word |
+| 3701 | A21: 8255 Port A Fault |
+| 3702 | A21: 8255 Port B Fault |
+| 3703 | A21: 8255 Port C Fault |
+| 3704 | Assembly A21 Not Responding |
+| 3705 | A21: Rear Panel Data Bus Fault |
+| 3708 | A21: 8255 Was Reset |
+
+## 3800-Level Faults: Self Diagnostics Subsystem (Switch Matrix)
+
+| Code | Message |
+|------|---------|
+| 3800 | A8: 8255 Control Word |
+| 3801 | A8: 8255 Port A Fault |
+| 3802 | A8: 8255 Port B Fault |
+| 3803 | A8: 8255 Port C Fault |
+| 3804 | A8: Zero Amp Lo Noise Fault |
+| 3805 | A8: Zero Amp Lo Offset |
+| 3806 | A8: Zero Amp Lo Gain Fault |
+| 3807 | A8: Zero Amp Hi Noise Fault |
+| 3808 | A8: Zero Amp Hi Offset |
+| 3809 | A8: Zero Amp Hi Gain Fault |
+| 3810 | A8: 2.2V Amp Noise Fault |
+| 3811 | A8: Zero Amp Offset |
+| 3812 | A8: 2.2V Gain Fault |
+| 3813 | A8: 220mV Offset Fault |
+| 3814 | A8: 220mV Divider Fault |
+| 3815 | A8: 22mV Divider Fault |
+| 3818 | A8: Out Lo To Sense Lo Continuity Fault |
+| 3819 | A8: Relay Fault |
+| 3824 | A8: Oven Regulation Fault |
+| 3825 | Assembly A8 Not Responding |
+| 3826 | A8: 8255 Was Reset |
+| 3827 | Assembly A8 Too Hot |
+
+## 3900-Level Faults: Self Diagnostics Subsystem (Wideband)
+
+| Code | Message |
+|------|---------|
+| 3900 | A5: 8255 Control Word |
+| 3901 | A5: 8255 Port A Fault |
+| 3902 | A5: 8255 Port B Fault |
+| 3903 | A5: 8255 Port C Fault |
+| 3904 | Optional Assemblies A5/A6 Are Missing |
+| 3905 | A6: Phase Lock Loop Fault |
+| 3906 | A6: Phase Lock Loop Fault At 30Mhz |
+| 3907 | A5: RMS Sensor Fault |
+| 3908 | A5: RMS Sensor Fault At 30Mhz |
+| 3909 | A5: RMS Sensor Fault At 6.5V DC in |
+| 3910 | A5/A6: Ampl. Control Fault |
+| 3911 | A5/A6: Ampl. Control Fault At 30Mhz |
+| 3912 | A5/A6: Output Offset Fault |
+| 3913 | A5/A6: Output Offset Fault At 30Mhz |
+| 3914 | A5: 0DB Output Attenuation Fault |
+| 3915 | A5: 10DB Output Attenuation Fault |
+| 3916 | A5: 20DB Output Attenuation Fault |
+| 3917 | A5: 30DB Output Attenuation Fault |
+| 3918 | A5: 40DB Output Attenuation Fault |
+| 3922 | A5/A6: Wideband Initialization Fault |
+| 3923 | A5: 8255 Was Reset |
+
+## 4000-Level Faults: Analog Sequencing Subsystem
+
+| Code | Message |
+|------|---------|
+| 4000 | Bad Sequence ID |
+| 4001 | Over Nested Subsequences |
+| 4002 | Bad Sequence Command Code |
+| 4003 | Bad Reply Size From Inguard |
+| 4004 | Reply From Inguard Too Small |
+| 4005 | False MSG Semaphore from Inguard |
+| 4006 | Inguard CPU POP |
+| 4007 | Inguard CPU Reset |
+| 4008 | Inguard CPU A/D Timeout |
+| 4009 | Inguard CPU Timed Out On Main CPU |
+| 4010 | Inguard CPU Detected A Command Error |
+| 4011 | Bad Y5000 Get/Set Selector |
+| 4012 | Sequencer Timed Out Waiting For Inguard |
+| 4013 | Illegal Analog State Command For 5725 |
+| 4014 | Sequencer Timed Out Waiting for 5725 |
+| 4015 | Could not Queue Command To 5725 BX |
+| 4016 | Reply From 5725 Was Garbled |
+
+## 4100-Level Faults: Serial Interface Driver Subsystem
+
+| Code | Message |
+|------|---------|
+| 4100 | Bad Virtual channel |
+| 4101 | Framing |
+| 4102 | Input Queue Overflow |
+| 4103 | Overrun |
+| 4104 | Parity |
+| 4105 | Uart Failed Self Test |
+| 4106 | Serial Port 0 |
+| 4107 | Serial Port 1 |
+| 4108 | Guard Crossing UART |
+| 4109 | Serial Port 3 |
+| 4110 | Remote Interface UART |
+| 4111 | Boost Crossing UART |
+
+## 4200-Level Faults: Instrument State Manager Subsystem
+
+| Code | Message |
+|------|---------|
+| 4200 | Bad Boolean Value Selector |
+| 4201 | Meaningless Target State Value |
+| 4202 | Meaningless Actual State Value |
+| 4203 | Mystery Target/Actual State Difference |
+
+## 4300-Level Faults: Self Test Subsystem
+
+| Code | Message |
+|------|---------|
+| 4301 | ROM Checksum |
+| 4302 | RAM |
+| 4303 | Real Time Clock |
+| 4304 | Keyboard |
+| 4305 | Output Display |
+| 4306 | Control Display |
+| 4307 | IEEE488 |
+| 4308 | Rear Panel DUART |
+| 4309 | Guard Crossing DUART |
+| 4310 | Interrupt Hardware |
+| 4311 | Inguard CPU ROM Fault |
+| 4312 | Inguard CPU RAM Fault |
+| 4313 | Front Panel Refresh Fault |
+
+## 4400-Level Faults: General Purpose Utility Subsystem
+
+| Code | Message |
+|------|---------|
+| 4400 | Invalid Command |
+
+## 4500-Level Faults: Analog Value Finder Subsystem
+
+| Code | Message |
+|------|---------|
+| 4500 | VFdcDac Value Out Of DAC Range |
+| 4501 | Bad Range Selector |
+| 4502 | Non-Vfinder Range |
+| 4503 | Bad DAC ICALL |
+| 4504 | User Range Adjust of 0 (I used 1) |
+| 4505 | Divide By 0 In (VF)correct |
+
+## 4600-Level Faults: Watch Dog Monitoring Subsystem
+
+| Code | Message |
+|------|---------|
+| 4600 | Watchdog Timed Out |
+
+## 4700-Level Faults: Operating Kernel Subsystem
+
+| Code | Message |
+|------|---------|
+| 4700 | Kstart Returned |
+| 4701 | Task Termination |
+| 4702 | No Signal Handler |
+| 4703 | Ksuspend( ) When Not RUNNING |
+| 4704 | Ksleep( ) When Not RUNNING |
+| 4705 | Kevwait( ) When Not RUNNING |

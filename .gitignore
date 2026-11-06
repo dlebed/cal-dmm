@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+*.egg-info/
+dist/
+build/
+.DS_Store
+.vscode/
+.idea/
+
+# Manufacturer PDFs are not redistributed; commit markdown extracts instead.
+*.pdf
+
+# Claude Code local state
+.claude/settings.local.json
+.claude/worktrees/
+
+# Run outputs
+runs/
+*.csv
+!tests/**/*.csv
